@@ -470,7 +470,7 @@ class LinuxContainerEngine @Inject constructor(
         // root 命令模式：直接走 Magisk su，不进 proot 容器，AI 以真 root 执行命令
         if (rootCommandMode) {
             FileLogger.i(TAG, "AI root 模式：通过 su 执行命令")
-            val pb = buildProcessBuilder(buildSuInvocation(command))
+            val pb = buildProcessBuilder(buildSuInvocation(command, projectPath))
             pb.redirectErrorStream(true)
             pb.redirectInput(STDIN_FROM_DEV_NULL)
             return pb.start()
@@ -746,8 +746,14 @@ class LinuxContainerEngine @Inject constructor(
      * su 由 Magisk 通过 PATH 提供，无需指定绝对路径；环境变量继承 App 进程的原生 Android 环境，
      * 不注入容器的 ALPINE 变量。
      */
-    fun buildSuInvocation(command: String): ProotInvocation {
-        val argv = listOf("su", "-c", command)
+    fun buildSuInvocation(command: String, projectPath: String? = null): ProotInvocation {
+        // root 模式下，先 cd 到工作区路径，让 AI 在正确目录下执行命令
+        val fullCommand = if (projectPath != null && projectPath.startsWith("/")) {
+            "cd '$projectPath' && $command"
+        } else {
+            command
+        }
+        val argv = listOf("su", "-c", fullCommand)
         val env = System.getenv()?.toMap()?.toMutableMap() ?: mutableMapOf()
         return ProotInvocation(argv, env)
     }

@@ -22,6 +22,7 @@
 - **Root 模式**：如果用户已开启「AI 以 Root 执行命令」开关，你可以直接用 `su` 或 `/system/bin/su` 执行命令，以 root 身份访问 `/data/`、其他 App 私有目录、系统文件。此时命令不经过容器，直接在 Android 原生 shell 跑；需要系统级操作（如读写其他 App 数据、改系统设置、装 Magisk 模块）时直接使用，不要犹豫。
   - **重要**：root 模式下，文件操作优先用 shell 命令（`ls`、`cat`、`cp`、`grep`、`sed`、`echo >` 等），不要用 `list`、`readFile`、`writeFile`、`editFile` 工具——这些工具是 App 进程权限，访问不了 `/data/` 等系统目录，会失败。
   - 例如读 `/data/项目/陀螺仪/` 目录用 `ls -la /data/项目/陀螺仪/`，读文件用 `cat /data/项目/陀螺仪/config.txt`，写文件用 `echo '内容' > /data/项目/陀螺仪/output.txt`。
+  - **工作目录**：root 模式下 shell 的当前工作目录已经是用户指定的工作区路径（如 `/data/项目/陀螺仪`），直接跑命令即可，不要 `cd ~/workspace`（root 模式下 `~/workspace` 不存在）。用 `pwd` 确认当前目录。
 - 网络：时效性问题用 `websearch`，抓取网页用 `webfetch`，页面自动化用 `browser`（多标签、可后台运行）。图像生成用 `generateImage`。
 - 交互与流程：需要用户决策时用 `askUserQuestion`（仅当回答会改变下一步行动）；进出 PLAN 模式用 `planMode`（`action="enter"` 进入，`action="exit"` 退出并自动恢复到进入前的模式）；多步骤任务用 `todo` 维护清单，全部完成后主动以空列表清空，不留残余条目；长期记忆用 `memory`。
 
