@@ -104,6 +104,37 @@ class TerminalSessionManager @Inject constructor(
      */
     suspend fun createInteractiveTab(): String = createTab()
 
+    /**
+     * 新建一个 Root Shell 标签：通过 Magisk su 直接进入 Android 原生 root shell，
+     * 不经过 PRoot 容器，可读写 /data、/data/data/com.termux 等系统目录。
+     */
+    suspend fun createRootTab(): String {
+        val id = nextId()
+        // root shell 不需要容器，跳过 ensureContainer；失败（如未装 Magisk/su 未授权）直接抛
+        val shellCommand = buildRootInteractiveCommand()
+        FileLogger.i(TAG, "Root shell 命令（$id）：$shellCommand")
+        val (session, client) = try {
+            buildSession(shellCommand, useRoot = true)
+        } catch (e: Exception) {
+            FileLogger.e(TAG, "创建 Root shell 会话失败（$id）", e)
+            throw e
+        }
+        addTab(
+            TerminalTab(
+                id = id,
+                title = "root-$id",
+                session = session,
+                isBackground = false,
+                command = null,
+                client = client,
+                runState = RunState.Running
+            )
+        )
+        _activeTabId.value = id
+        FileLogger.i(TAG, "新建 Root shell 标签 $id：pid=${session.pid} 运行中=${session.isRunning}")
+        return id
+    }
+
     private suspend fun createTab(): String {
         FileLogger.i(TAG, "新建交互终端标签：开始准备容器")
         ensureContainer()
@@ -146,6 +177,15 @@ class TerminalSessionManager @Inject constructor(
             "export PS1='\\[\\033[01;32m\\]\\u@\\h\\[\\033[00m\\]:\\[\\033[01;34m\\]\\w\\[\\033[00m\\]\\$ '; " +
             "alias ls='ls --color=auto' 2>/dev/null; alias grep='grep --color=auto' 2>/dev/null; alias ll='ls -la --color=auto' 2>/dev/null; " +
             "exec ${containerEngine.defaultShell()}"
+    }
+
+    /**
+     * Root shell 启动命令：不跑容器 provision.sh，直接 exec /system/bin/sh，
+     * PS1 用红色 root 提示符，让用户一眼认出当前是 root 环境。
+     */
+    private fun buildRootInteractiveCommand(): String {
+        return "export PS1='\\[\\033[01;31m\\]root@\\h\\[\\033[00m\\]:\\[\\033[01;34m\\]\\w\\[\\033[00m\\]\\# '; " +
+            "exec /system/bin/sh"
     }
 
     /**
@@ -398,9 +438,13 @@ class TerminalSessionManager @Inject constructor(
      * client 的 viewProvider/onFinished 都以 session 为键回查 [_tabs]：会话与标签一一对应，
      * 故无需把 tab 引用提前注入 client（避免「构造 client 时 tab 还不存在」的先有鸡先有蛋）。
      */
-    private fun buildSession(shellCommand: String): Pair<TerminalSession, AppTerminalSessionClient> {
+    private fun buildSession(shellCommand: String, useRoot: Boolean = false): Pair<TerminalSession, AppTerminalSessionClient> {
         val workspace = workspaceRepository.currentPath()
-        val invocation = containerEngine.buildProotInvocation(shellCommand, workspace)
+        val invocation = if (useRoot) {
+            containerEngine.buildSuInvocation(shellCommand)
+        } else {
+            containerEngine.buildProotInvocation(shellCommand, workspace)
+        }
         FileLogger.i(
             TAG,
             "PTY 启动：workspace=$workspace 可执行=${invocation.executable}" +

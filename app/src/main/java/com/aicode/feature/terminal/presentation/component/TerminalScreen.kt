@@ -26,6 +26,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -174,7 +176,8 @@ fun TerminalScreen(
                         creating = creatingTab,
                         onSelect = { viewModel.activate(it) },
                         onClose = { viewModel.closeTab(it) },
-                        onNew = { viewModel.newTab() }
+                        onNew = { viewModel.newTab() },
+                        onNewRoot = { viewModel.newRootTab() }
                     )
 
                     Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -226,7 +229,8 @@ private fun TabBar(
     creating: Boolean,
     onSelect: (String) -> Unit,
     onClose: (String) -> Unit,
-    onNew: () -> Unit
+    onNew: () -> Unit,
+    onNewRoot: () -> Unit
 ) {
     val scrollState = rememberScrollState()
     val tabBounds = remember { mutableStateMapOf<String, Rect>() }
@@ -272,19 +276,35 @@ private fun TabBar(
                 )
             }
             // SSH 模式下新建需等服务器响应，等待期间显示转圈并禁用按钮，避免网络卡顿时重复点击连开多个标签。
-            IconButton(onClick = onNew, enabled = !creating, modifier = Modifier.size(32.dp)) {
-                if (creating) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.primary
+            var showNewMenu by remember { mutableStateOf(false) }
+            Box {
+                IconButton(onClick = { showNewMenu = true }, enabled = !creating, modifier = Modifier.size(32.dp)) {
+                    if (creating) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        Icon(
+                            FeatherIcons.Plus,
+                            contentDescription = stringResource(R.string.common_new_tab),
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+                DropdownMenu(
+                    expanded = showNewMenu,
+                    onDismissRequest = { showNewMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("普通 Shell") },
+                        onClick = { showNewMenu = false; onNew() }
                     )
-                } else {
-                    Icon(
-                        FeatherIcons.Plus,
-                        contentDescription = stringResource(R.string.common_new_tab),
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(16.dp)
+                    DropdownMenuItem(
+                        text = { Text("Root Shell (Magisk su)") },
+                        onClick = { showNewMenu = false; onNewRoot() }
                     )
                 }
             }

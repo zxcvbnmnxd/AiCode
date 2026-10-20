@@ -123,6 +123,25 @@ class TerminalViewModel @Inject constructor(
         }
     }
 
+    /** 新建 Root Shell 标签（仅本地模式；远程 SSH 下 root 由远端决定，不适用）。 */
+    fun newRootTab() {
+        if (_creatingTab.value) return
+        if (isRemote()) {
+            FileLogger.w(TAG, "远程 SSH 模式下不支持本地 Root Shell")
+            return
+        }
+        _creatingTab.value = true
+        viewModelScope.launch {
+            try {
+                localManager.createRootTab()
+            } catch (e: Exception) {
+                FileLogger.e(TAG, "新建 Root Shell 失败（Magisk 未授权或未安装？）", e)
+            } finally {
+                _creatingTab.value = false
+            }
+        }
+    }
+
     fun activate(id: String) = if (isRemote()) remoteManager.activate(id) else localManager.activate(id)
 
     fun closeTab(id: String) = if (isRemote()) remoteManager.closeTab(id) else localManager.closeTab(id)

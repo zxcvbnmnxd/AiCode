@@ -715,6 +715,20 @@ class LinuxContainerEngine @Inject constructor(
     }
 
     /**
+     * 构造进入 Android 原生 root shell 的调用（通过 Magisk su）。
+     *
+     * 与 [buildProotInvocation] 的区别：不走 PRoot 容器，直接以 root 身份在 Android 系统上跑
+     * /system/bin/sh，因此能读写 /data、/data/data/com.termux 等普通 shell 进不去的目录。
+     * su 由 Magisk 通过 PATH 提供，无需指定绝对路径；环境变量继承 App 进程的原生 Android 环境，
+     * 不注入容器的 ALPINE 变量。
+     */
+    fun buildSuInvocation(command: String): ProotInvocation {
+        val argv = listOf("su", "-c", command)
+        val env = System.getenv()?.toMap()?.toMutableMap() ?: mutableMapOf()
+        return ProotInvocation(argv, env)
+    }
+
+    /**
      * 构造 PRoot 调用的公共前缀 argv：proot 二进制 + rootfs + 标准绑定 + 伪 root + 工作区绑定，
      * 但**不含**最终的客户机命令（由各调用方自行追加 `/bin/sh -c …` 或 `exec` 形式）。
      */
