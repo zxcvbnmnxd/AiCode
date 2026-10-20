@@ -111,13 +111,20 @@ class LinuxContainerEngine @Inject constructor(
     var rootCommandMode: Boolean = false
         private set
 
+    private val prefs by lazy {
+        context.getSharedPreferences("aicode_root_prefs", android.content.Context.MODE_PRIVATE)
+    }
+
     /** 切换 AI root 命令模式。 */
     fun setRootCommandMode(enabled: Boolean) {
         rootCommandMode = enabled
+        prefs.edit().putBoolean("root_command_mode", enabled).apply()
         FileLogger.i(TAG, "AI root 命令模式已${if (enabled) "开启" else "关闭"}")
     }
 
     init {
+        // 启动时从本地读取 root 模式开关，重启不丢失
+        rootCommandMode = prefs.getBoolean("root_command_mode", false)
         CoroutineScope(Dispatchers.IO).launch {
             containerSettingsRepository.activeProfileIdFlow.collect { id ->
                 currentProfile = resolveProfile(id)

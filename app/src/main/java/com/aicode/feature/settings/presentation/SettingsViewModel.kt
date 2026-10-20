@@ -454,7 +454,7 @@ class SettingsViewModel @Inject constructor(
     val proxyTestState: StateFlow<ProxyTestUiState> = _proxyTestState.asStateFlow()
 
     /** AI 命令是否以 root（Magisk su）模式执行。 */
-    private val _rootCommandMode = MutableStateFlow(false)
+    private val _rootCommandMode = MutableStateFlow(containerEngine.rootCommandMode)
     val rootCommandMode: StateFlow<Boolean> = _rootCommandMode.asStateFlow()
 
     fun setRootCommandMode(enabled: Boolean) {
