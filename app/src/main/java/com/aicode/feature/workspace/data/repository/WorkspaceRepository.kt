@@ -447,6 +447,34 @@ class WorkspaceRepository @Inject constructor(
         runCatching { context.contentResolver.releasePersistableUriPermission(uri, flags) }
     }
 
+    /**
+     * 手动输入路径添加本地工作区（不走 SAF 选择器）。
+     * 用于 root 模式下访问 /data/ 等系统目录——这些路径 SAF 选不到，但 root shell 能读写。
+     * 不做写探测（root 模式下 App 进程可能没权限探测，但 su 能访问），直接注册路径。
+     */
+    suspend fun addWorkspaceByPath(path: String, name: String? = null): Workspace? = withContext(Dispatchers.IO) {
+        val normalized = path.trim().trimEnd('/')
+        if (normalized.isBlank() || !normalized.startsWith("/")) {
+            _addError.value = "路径必须以 / 开头（绝对路径）"
+            return@withContext null
+        }
+        val dir = File(normalized)
+        val existing = readExternalWorkspaces()
+        if (existing.any { it.path == normalized }) {
+            _addError.value = "该路径已是工作区"
+            return@withContext null
+        }
+        val allNames = (_workspaces.value.map { it.name } + existing.map { it.name }).toSet()
+        val baseName = sanitize(name ?: dir.name).ifBlank { DEFAULT_WORKSPACE }
+        val uniqueName = uniqueName(baseName, allNames)
+        // uri 留空（手动路径不走 SAF）
+        writeExternalWorkspaces(existing + ExternalWorkspaceRecord(uniqueName, normalized, ""))
+        refreshWorkspaces()
+        val created = _workspaces.value.firstOrNull { it.path == normalized }
+        FileLogger.i(TAG, "手动添加工作区: $uniqueName ($normalized)")
+        created
+    }
+
     /** 删除工作区。内部/远程工作区连同文件与会话记录删除；外部本地工作区只解除关联，不删除物理目录，
      *  其会话记录是否一并删除由「偏好设置」中的开关决定。
      *  若删的是当前工作区，则自动切到剩余的第一个。 */

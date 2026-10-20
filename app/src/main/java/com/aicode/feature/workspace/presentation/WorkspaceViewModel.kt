@@ -88,6 +88,11 @@ class WorkspaceViewModel @Inject constructor(
         onResult(ws)
     }
 
+    fun addWorkspaceByPath(path: String, name: String?, onResult: (Workspace?) -> Unit = {}) = viewModelScope.launch {
+        val ws = runCatching { repository.addWorkspaceByPath(path, name) }.getOrNull()
+        onResult(ws)
+    }
+
     fun deleteWorkspace(name: String) = viewModelScope.launch {
         runCatching { repository.deleteWorkspace(name) }
     }

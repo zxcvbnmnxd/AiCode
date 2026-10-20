@@ -26,6 +26,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import com.aicode.core.ui.AdaptiveModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -237,6 +238,11 @@ private fun WorkspaceSelectionHost(
                 if (externalWarningDismissed) folderLauncher.launch(null)
                 else showExternalWarning = true
             },
+            onAddByPath = { path, name ->
+                viewModel.addWorkspaceByPath(path, name) { created ->
+                    if (created != null) select(created)
+                }
+            },
             onSelect = ::select,
             onCreate = { name ->
                 viewModel.createWorkspace(name) { created ->
@@ -315,6 +321,7 @@ private fun WorkspaceSheet(
     current: Workspace?,
     showExternalEntry: Boolean,
     onAddExternal: () -> Unit,
+    onAddByPath: (String, String?) -> Unit,
     onSelect: (Workspace) -> Unit,
     onCreate: (String) -> Unit,
     onDelete: (Workspace) -> Unit,
@@ -324,6 +331,9 @@ private fun WorkspaceSheet(
 ) {
     val sheetState = rememberModalBottomSheetState()
     var showCreateDialog by remember { mutableStateOf(false) }
+    var showPathDialog by remember { mutableStateOf(false) }
+    var pathInput by remember { mutableStateOf("") }
+    var nameInput by remember { mutableStateOf("") }
     var pendingDelete by remember { mutableStateOf<Workspace?>(null) }
 
     AdaptiveModalBottomSheet(
@@ -352,6 +362,11 @@ private fun WorkspaceSheet(
                         Icon(FeatherIcons.HardDrive, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(Spacing.xs))
                         Text(stringResource(R.string.workspace_add_local_dir))
+                    }
+                    TextButton(onClick = { showPathDialog = true }) {
+                        Icon(FeatherIcons.Folder, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(Spacing.xs))
+                        Text("手动路径")
                     }
                 }
                 TextButton(onClick = { showCreateDialog = true }) {
@@ -395,6 +410,46 @@ private fun WorkspaceSheet(
                 showCreateDialog = false
             },
             onDismiss = { showCreateDialog = false }
+        )
+    }
+
+    if (showPathDialog) {
+        AlertDialog(
+            onDismissRequest = { showPathDialog = false },
+            title = { Text("手动添加路径") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = pathInput,
+                        onValueChange = { pathInput = it },
+                        label = { Text("绝对路径（如 /data/项目/jni）") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(Spacing.sm))
+                    OutlinedTextField(
+                        value = nameInput,
+                        onValueChange = { nameInput = it },
+                        label = { Text("名称（可选，留空用目录名）") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onAddByPath(pathInput.trim(), nameInput.trim().ifBlank { null })
+                        pathInput = ""
+                        nameInput = ""
+                        showPathDialog = false
+                    },
+                    enabled = pathInput.trim().startsWith("/")
+                ) { Text("添加") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPathDialog = false }) { Text("取消") }
+            }
         )
     }
 
