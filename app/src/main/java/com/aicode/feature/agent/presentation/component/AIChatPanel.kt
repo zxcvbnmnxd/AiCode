@@ -169,6 +169,8 @@ internal data class ChatRenderItem(
     val turnProcess: List<ChatRenderItem> = emptyList(),
     /** 是否渲染消息自带的思考块；结果块把思考抽为过程项后传 false。 */
     val reasoningVisible: Boolean = true,
+    val lazyProcess: Boolean = false,
+    val groupMember: Boolean = false,
 )
 
 /** 工具调用分组头 item 的 contentType。 */
@@ -304,11 +306,17 @@ internal fun buildChatItems(
     groupOverrides: Map<String, Boolean>,
     turnOverrides: Map<String, Boolean> = emptyMap(),
     activeTurnKey: String? = null,
+    sessionId: String? = null,
 ): List<ChatRenderItem> {
     val items = ArrayList<ChatRenderItem>(messages.size)
     val (leading, turns) = splitChatTurns(messages)
     if (leading.isNotEmpty()) {
-        val headKey = leadingHeadKey(leading.last())
+        // 没有轮首时，分页窗口两端都可能随工具输出移动，只能用所属会话保持展开标识稳定。
+        val headKey = if (turns.isEmpty() && sessionId != null) {
+            "turn:head:session:$sessionId"
+        } else {
+            leadingHeadKey(leading.last())
+        }
         // 这一截通常结尾就是上一轮的最终回复（窗口从某一轮中间切开）：它照旧常显，
         // 只有它的思考与更早的过程步骤折进折叠头，与完整轮次的呈现一致。
         val resultId = leading.last().takeIf { it.isResultCandidate() }?.id
@@ -356,6 +364,38 @@ internal fun buildChatItems(
         items += buildTurnPersistentItems(turn.messages, resultId)
     }
     return items
+}
+
+private const val INLINE_PROCESS_ITEM_LIMIT = 8
+
+internal fun flattenLongProcesses(items: List<ChatRenderItem>): List<ChatRenderItem> = buildList {
+    for (item in items) {
+        val processSize = item.turnProcess.sumOf { it.toolGroup?.size ?: 1 }
+        if (item.turnHeader == null || processSize <= INLINE_PROCESS_ITEM_LIMIT) {
+            add(item)
+            continue
+        }
+        add(item.copy(turnProcess = emptyList(), lazyProcess = true))
+        if (!item.turnHeader.expanded) continue
+        for (child in item.turnProcess) {
+            val group = child.toolGroup
+            if (group == null) {
+                add(child)
+            } else {
+                add(child.copy(lazyProcess = true))
+                if (child.groupExpanded) {
+                    group.forEach { member ->
+                        add(ChatRenderItem(
+                            message = member,
+                            key = member.id,
+                            contentType = member.role.name,
+                            groupMember = true,
+                        ))
+                    }
+                }
+            }
+        }
+    }
 }
 
 /** 一轮任务：轮首用户消息 + 其后的全部消息（助手 / 工具 / 压缩卡片等）。 */
@@ -732,13 +772,14 @@ fun AIChatPanel(
                 ?.let { turnKeyOf(it.id) }
         }
     }
-    val chatItems = remember(messages, toolGroupOverrideSnapshot, turnOverrideSnapshot, activeTurnKey) {
-        buildChatItems(
+    val chatItems = remember(messages, toolGroupOverrideSnapshot, turnOverrideSnapshot, activeTurnKey, currentSessionId) {
+        flattenLongProcesses(buildChatItems(
             messages = messages,
             groupOverrides = toolGroupOverrideSnapshot,
             turnOverrides = turnOverrideSnapshot,
             activeTurnKey = activeTurnKey,
-        )
+            sessionId = currentSessionId,
+        ))
     }
     // 每轮任务的总耗时（用户发送 → 本轮 AI 收工）与 token 合计，都只挂在轮末助手气泡下方
     val taskDurations = remember(messages, isBusy) {
@@ -1154,6 +1195,7 @@ fun AIChatPanel(
     // 额外：流式输出时内容持续增长，用户可能松手后又被「顶」离底部——
     // 用 snapshotFlow { isAtBottom } 持续监测，只要滑到底部就恢复跟随，
     // 满足「流式中滚到底部自动继续跟随」。
+    val latestIsAtBottom = rememberUpdatedState(isAtBottom)
     LaunchedEffect(listState) {
         listState.interactionSource.interactions.collect { interaction ->
             when (interaction) {
@@ -1163,14 +1205,14 @@ fun AIChatPanel(
                     // 避免「松手在底部但惯性上滑」被立即拉回。
                     scope.launch {
                         delay(150)
-                        if (!userScrollGesture) followBottom = isAtBottom
+                        if (!userScrollGesture) followBottom = latestIsAtBottom.value
                     }
                 }
             }
         }
     }
     LaunchedEffect(listState) {
-        snapshotFlow { isAtBottom && !userScrollGesture }.collect { atBottom ->
+        snapshotFlow { latestIsAtBottom.value && !userScrollGesture }.collect { atBottom ->
             if (atBottom) followBottom = true
         }
     }
@@ -1243,10 +1285,11 @@ fun AIChatPanel(
 
     // 内容变化信号旁路：文本/思考/消息条数变化时立即校准一次，不等下一帧——
     // 与常驻校准循环互为补充，覆盖「无动画帧」的间隙，杜绝跟丢窗口。
+    val latestMessageCount = rememberUpdatedState(messages.size)
     LaunchedEffect(listState, messagesReady) {
         if (!messagesReady) return@LaunchedEffect
         snapshotFlow {
-            Triple(streamingText?.length, streamingReasoning?.length, messages.size)
+            Triple(streamingText?.length, streamingReasoning?.length, latestMessageCount.value)
         }.collect { calibrateToAnchor() }
     }
 
@@ -1353,8 +1396,7 @@ fun AIChatPanel(
         }
     }
 
-    // 渲染一条 item。轮头 / 工具分组的展开内容与折叠头在同一 Composable 内用 AnimatedVisibility
-    // 整体展开（而非逐个列表项各自 placement 动画）：高度平滑撑开、内容跟着一起走，手感是一个整体。
+    // 短过程整体展开，长过程由主列表按可见范围组合，避免点击时全量测量。
     @Composable
     fun RenderChatItem(item: ChatRenderItem) {
         val header = item.turnHeader
@@ -1371,7 +1413,7 @@ fun AIChatPanel(
                     }
                 )
                 AnimatedVisibility(
-                    visible = header.expanded,
+                    visible = header.expanded && !item.lazyProcess,
                     enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
                     exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
                 ) {
@@ -1401,7 +1443,7 @@ fun AIChatPanel(
                     }
                 )
                 AnimatedVisibility(
-                    visible = item.groupExpanded,
+                    visible = item.groupExpanded && !item.lazyProcess,
                     enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
                     exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
                 ) {
@@ -1438,6 +1480,7 @@ fun AIChatPanel(
                     isChunkHeader = item.isChunkHeader,
                     isChunkFooter = item.isChunkFooter,
                     reasoningVisible = item.reasoningVisible,
+                    contentPadding = if (item.groupMember) ToolGroupMemberPadding else PaddingValues(0.dp),
                     onRewindClick = { viewModel.openRewindMenu(it) },
                     onMoreClick = { messageForMenu = it },
                     toolExpandedOverride = toolGroupOverrideSnapshot[message.id],

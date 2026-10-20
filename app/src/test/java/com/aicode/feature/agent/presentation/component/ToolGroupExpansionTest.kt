@@ -265,6 +265,33 @@ class ToolGroupExpansionTest {
     }
 
     @Test
+    fun truncatedWindow_manualExpansionSurvivesToolUpdatesAndWindowShift() {
+        val key = "turn:head:session:s1"
+        val overrides = mapOf(key to true)
+        val windows = listOf(
+            listOf(assistant("a1"), tool("t1"), tool("t2")),
+            listOf(assistant("a1"), tool("t1"), tool("t2"), tool("t3")),
+            listOf(tool("t2"), tool("t3"), tool("t4")),
+            listOf(assistant("older"), tool("t2"), tool("t3"), tool("t4")),
+        )
+        windows.forEach { messages ->
+            val header = buildChatItems(
+                messages, emptyMap(), overrides, sessionId = "s1"
+            ).header().turnHeader!!
+            assertEquals(key, header.key)
+            assertTrue(header.expanded)
+        }
+        val otherSession = buildChatItems(
+            windows.first(), emptyMap(), overrides, sessionId = "s2"
+        ).header().turnHeader!!
+        assertFalse(otherSession.expanded)
+        val collapsed = buildChatItems(
+            windows.last(), emptyMap(), mapOf(key to false), sessionId = "s1"
+        ).header().turnHeader!!
+        assertFalse(collapsed.expanded)
+    }
+
+    @Test
     fun truncatedWindow_persistentLeadingStaysTopLevel() {
         // 压缩卡片 / 后台通知 / 带附件工具在这一截里同样不参与折叠
         val notice = AgentUIMessage(id = "n1", role = MessageRole.USER, content = "done")
@@ -278,6 +305,37 @@ class ToolGroupExpansionTest {
         val rendered = items(messages)
         assertTrue("后台通知常显", rendered.any { it.key == "n1" })
         assertEquals("turn:head:n1", rendered.first { it.turnHeader != null }.turnHeader!!.key)
+    }
+
+    @Test
+    fun longProcess_expandedToolsBecomeIndependentLazyItems() {
+        val messages = listOf(user("u0")) + (1..20).map { tool("t$it") }
+        val expanded = flattenLongProcesses(items(
+            messages,
+            overrides = mapOf(groupKey to true),
+            turnOverrides = mapOf("turn:u0" to true),
+        ))
+        assertTrue(expanded.header().lazyProcess)
+        assertTrue(expanded.header().turnProcess.isEmpty())
+        assertEquals(20, expanded.count { it.groupMember })
+        assertEquals(expanded.size, expanded.map { it.key }.toSet().size)
+        val collapsed = flattenLongProcesses(items(messages))
+        assertEquals(2, collapsed.size)
+        assertFalse(collapsed.any { it.groupMember })
+        val groupCollapsed = flattenLongProcesses(items(
+            messages, turnOverrides = mapOf("turn:u0" to true)
+        ))
+        assertEquals(3, groupCollapsed.size)
+        assertFalse(groupCollapsed.any { it.groupMember })
+    }
+
+    @Test
+    fun shortProcess_keepsWholeProcessAnimation() {
+        val rendered = flattenLongProcesses(items(
+            listOf(user("u0"), tool("t1")), activeTurnKey = "turn:u0"
+        ))
+        assertFalse(rendered.header().lazyProcess)
+        assertEquals(1, rendered.header().turnProcess.size)
     }
 
     @Test

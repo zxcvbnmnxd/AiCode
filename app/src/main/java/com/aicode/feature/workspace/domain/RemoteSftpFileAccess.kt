@@ -8,7 +8,6 @@ import com.aicode.feature.workspace.data.repository.WorkspaceRepository
 import com.aicode.feature.workspace.domain.WorkspacePathMapper.Companion.CONTAINER_ROOT
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import net.schmizz.sshj.sftp.FileMode
@@ -55,7 +54,7 @@ class RemoteSftpFileAccess @Inject constructor(
     private val workspaceRepository: WorkspaceRepository
 ) : FileAccessProvider {
 
-    private val sftpMutex = Mutex()
+    private val sftpMutex get() = connection.sftpOperationMutex
 
     /** 当前选中工作区在远程服务器上的真实路径（如 /data/.../test/111）。 */
     private fun currentWorkspaceRoot(): String {

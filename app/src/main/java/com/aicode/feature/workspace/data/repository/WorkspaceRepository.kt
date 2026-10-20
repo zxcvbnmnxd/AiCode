@@ -12,6 +12,8 @@ import com.aicode.core.util.FileLogger
 import com.aicode.feature.agent.domain.container.ConnectionState
 import com.aicode.feature.agent.domain.container.RemoteSshConnection
 import com.aicode.feature.agent.domain.session.SessionUseCase
+import com.aicode.feature.credentials.data.CredentialInjectSettingsRepository
+import com.aicode.feature.credentials.domain.repository.CredentialRepository
 import com.aicode.feature.settings.data.repository.ExecutionMode
 import com.aicode.feature.settings.data.repository.ExecutionModeHolder
 import com.aicode.feature.settings.data.repository.GeneralSettingsRepository
@@ -58,7 +60,9 @@ class WorkspaceRepository @Inject constructor(
     private val remoteSshConnection: RemoteSshConnection,
     private val pathHomeResolver: PathHomeResolver,
     private val sessionUseCase: SessionUseCase,
-    private val generalSettingsRepository: GeneralSettingsRepository
+    private val generalSettingsRepository: GeneralSettingsRepository,
+    private val credentialInjectSettings: CredentialInjectSettingsRepository,
+    private val credentialRepository: CredentialRepository
 ) {
     /** 校验失败时给 UI 的提示文案（如目录不可写/无法解析），消费后置 null。 */
     private val _addError = MutableStateFlow<String?>(null)
@@ -176,7 +180,15 @@ class WorkspaceRepository @Inject constructor(
         // 远程模式：选中工作区后更新符号链接，让 Bash 的 ~/workspace 指向当前工作区
         if (!isLocal() && target != null) {
             remoteSshConnection.updateWorkspaceSymlink(target.path)
+            syncRemoteCredentials(target.path)
         }
+    }
+
+    private suspend fun syncRemoteCredentials(workspacePath: String) {
+        val config = remoteSshConnection.config ?: return
+        val key = credentialInjectSettings.serverKey(config.host, config.port)
+        if (!credentialInjectSettings.isAutoInjectEnabled(key)) return
+        remoteSshConnection.uploadGitCredentialConfig(credentialRepository.getAll().first(), workspacePath)
     }
 
     private fun isLocal(): Boolean =
@@ -268,12 +280,16 @@ class WorkspaceRepository @Inject constructor(
         }
         val wsRoot = pathHomeResolver.expandHome(cfg.remoteWorkspacePath.trimEnd('/'))
         return runCatching {
-            // ls -d */ 列出子目录，取基名
-            val output = execRemote("ls -d ${wsRoot}/*/ 2>/dev/null | xargs -n1 basename 2>/dev/null")
+            // 目录名可含空格，不能交给 xargs/basename 按空白分词（会把 "new api" 拆成两条），
+            // 用 glob 逐项原样输出目录名。
+            val output = execRemote(
+                "cd ${shellQuote(wsRoot)} 2>/dev/null || exit 0; " +
+                    "for d in */; do [ -d \"\$d\" ] && printf '%s\\n' \"\${d%/}\"; done"
+            )
             if (output.isBlank()) emptyList()
             else output.lines().filter { it.isNotBlank() }
                 .sortedBy { it.lowercase() }
-                .map { Workspace(name = it.trim(), path = "$wsRoot/${it.trim()}", type = WorkspaceType.REMOTE) }
+                .map { Workspace(name = it, path = "$wsRoot/$it", type = WorkspaceType.REMOTE) }
         }.getOrElse {
             FileLogger.w(TAG, "远程工作区列表失败: $wsRoot", it)
             emptyList()
@@ -317,6 +333,7 @@ class WorkspaceRepository @Inject constructor(
         // 远程模式：切换后更新符号链接指向新工作区
         if (!isLocal()) {
             remoteSshConnection.updateWorkspaceSymlink(target.path)
+            syncRemoteCredentials(target.path)
         }
     }
 

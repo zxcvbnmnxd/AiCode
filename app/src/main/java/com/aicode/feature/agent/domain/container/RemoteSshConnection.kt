@@ -7,6 +7,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,6 +19,10 @@ import kotlinx.coroutines.withContext
 import net.schmizz.sshj.SSHClient
 import net.schmizz.sshj.connection.channel.direct.Session
 import net.schmizz.sshj.sftp.SFTPClient
+import net.schmizz.sshj.sftp.OpenMode
+import net.schmizz.sshj.sftp.RenameFlags
+import java.util.EnumSet
+import java.util.UUID
 import net.schmizz.sshj.transport.DisconnectListener
 import net.schmizz.sshj.userauth.UserAuthException
 import com.hierynomus.sshj.common.KeyDecryptionFailedException
@@ -59,6 +64,8 @@ class RemoteSshConnection @Inject constructor(
 
     private val mutex = Mutex()
     private val sftpLock = Mutex()
+    private val credentialSyncMutex = Mutex()
+    internal val sftpOperationMutex = Mutex()
 
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     /** 连接状态流，供 UI 显示指示器、工作区初始化等待连接就绪。 */
@@ -256,6 +263,12 @@ class RemoteSshConnection @Inject constructor(
         }
     }
 
+    suspend fun stopSupervisor() {
+        supervisorJob?.cancelAndJoin()
+        supervisorJob = null
+        onReconnected = null
+    }
+
     /**
      * 更新 ~/workspace 符号链接指向当前选中工作区的远程路径，让 AI 用 ~/workspace/... 路径时
      * Bash 命令（pwd 等）能直接访问到正确的工作区目录。应在工作区选中/初始化后调用。
@@ -286,7 +299,7 @@ class RemoteSshConnection @Inject constructor(
     /**
      * 把内置文档同步到远程 ~/.aicode/docs/，让远程模式下 AI 也能像本地模式一样
      * 查阅 ~/.aicode/docs/ 下的设置说明文档。每次连接/重连后全量覆盖，使 App 升级后
-     * 远程文档随之更新。docs 是纯文本，用 exec + printf 写入即可，无需 SFTP。
+     * 远程文档随之更新。正文通过 SFTP 写入并替换。
      *
      * @param docs 相对 docs/ 的路径（可含子目录，如 guide/terminal.md）→ 文件内容。
      */
@@ -307,10 +320,7 @@ class RemoteSshConnection @Inject constructor(
                 prepSession.close()
                 for ((name, content) in docs) {
                     val dest = "$destDir/$name"
-                    val escaped = content.replace("\\", "\\\\").replace("'", "'\\\"'\"'")
-                    val session = client.startSession()
-                    session.exec("printf %s '$escaped' > '$dest'").join()
-                    session.close()
+                    writeRemoteFile(dest, content.toByteArray(Charsets.UTF_8))
                 }
                 FileLogger.i(TAG, "已同步 ${docs.size} 个文档到远程 $destDir")
             }.onFailure { FileLogger.w(TAG, "同步文档到远程失败", it) }
@@ -334,16 +344,11 @@ class RemoteSshConnection @Inject constructor(
         val destDir = home.trimEnd('/') + "/.aicode/" + destSubdir.trim('/')
         withContext(Dispatchers.IO) {
             runCatching {
-                val mk = client.startSession()
-                mk.exec("mkdir -p '$destDir'").join()
-                mk.close()
+                sftpOperationMutex.withLock { sftp().mkdirs(destDir) }
                 for ((name, bytes) in files) {
                     val dest = "$destDir/$name"
-                    val b64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
-                    val chmod = if (executable) " chmod +x '$dest';" else ""
-                    val session = client.startSession()
-                    session.exec("if [ ! -e '$dest' ]; then printf %s '$b64' | base64 -d > '$dest';$chmod fi").join()
-                    session.close()
+                    val exists = sftpOperationMutex.withLock { sftp().statExistence(dest) != null }
+                    if (!exists) writeRemoteFile(dest, bytes, executable, overwrite = false)
                 }
                 FileLogger.i(TAG, "已释放 ${files.size} 个内置文件到远程 $destDir")
             }.onFailure { FileLogger.w(TAG, "释放内置文件到远程失败: $destSubdir", it) }
@@ -361,30 +366,32 @@ class RemoteSshConnection @Inject constructor(
      * @param credentials 要注入的凭据列表（每 host 一条）。
      * @param workspaceRoot 远程工作区根路径（AI 的 ~/workspace 映射目录），限定注入范围。
      */
-    suspend fun uploadGitCredentialConfig(credentials: List<GitCredential>, workspaceRoot: String) {
-        val client = sshClient ?: return
-        val home = remoteHome ?: return
+    suspend fun uploadGitCredentialConfig(credentials: List<GitCredential>, workspaceRoot: String) = credentialSyncMutex.withLock {
+        val client = sshClient ?: return@withLock
+        val home = remoteHome ?: return@withLock
         val aicodeDir = home.trimEnd('/') + "/.aicode"
-        val wsRoot = workspaceRoot.trimEnd('/').ifEmpty { return }
+        val wsRoot = workspaceRoot.trimEnd('/').ifEmpty { return@withLock }
         withContext(Dispatchers.IO) {
             runCatching {
-                val mkdirSession = client.startSession()
-                mkdirSession.exec("mkdir -p '$aicodeDir'").join()
-                mkdirSession.close()
+                sftpOperationMutex.withLock { sftp().mkdirs(aicodeDir) }
 
                 val creds = credentials.joinToString("\n") { c ->
                     "https://${enc(c.username)}:${enc(c.token)}@${c.host}"
                 }.let { if (it.isNotEmpty()) "$it\n" else "" }
-                writeRemoteFile(client, "$aicodeDir/git-credentials", encodeCreds(creds))
+
 
                 // 上传 credential helper 脚本（本地由 ContainerInstaller 提取），配置为唯一 helper；
                 // 服务器上没有 App，用 AICODE_CRED_NO_PROMPT 让未命中时直接空退出而非等待弹窗。
                 containerInstaller.extractCredentialHelper()
                 val helperScript = java.io.File(containerInstaller.aicodeDir, "git-credential-aicode").readText()
-                writeRemoteFile(client, "$aicodeDir/git-credential-aicode", helperScript)
-                val chmodSession = client.startSession()
-                chmodSession.exec("chmod +x '$aicodeDir/git-credential-aicode'").join()
-                chmodSession.close()
+                check(helperScript.isNotBlank()) { "Git credential helper is empty" }
+                val remoteHelperScript = helperScript.replaceFirst(
+                    "#!/bin/sh\n",
+                    "#!/bin/sh\nexport AICODE_CRED_NO_PROMPT=1\n"
+                )
+                writeRemoteFile("$aicodeDir/git-credential-aicode", remoteHelperScript.toByteArray(Charsets.UTF_8), executable = true)
+                writeRemoteFile("$aicodeDir/git-credentials", encodeCreds(creds).toByteArray(Charsets.UTF_8))
+
 
                 val gitconfig = buildString {
                     append("[include]\n")
@@ -392,13 +399,13 @@ class RemoteSshConnection @Inject constructor(
                     append("[includeIf \"gitdir:$wsRoot/\"]\n")
                     append("    path = ~/.aicode/gitconfig.credential\n")
                 }
-                writeRemoteFile(client, "$aicodeDir/gitconfig", gitconfig)
+                writeRemoteFile("$aicodeDir/gitconfig", gitconfig.toByteArray(Charsets.UTF_8))
 
                 val credentialConfig = buildString {
                     append("[credential]\n")
                     append("    helper = !AICODE_CRED_NO_PROMPT=1 $aicodeDir/git-credential-aicode\n")
                 }
-                writeRemoteFile(client, "$aicodeDir/gitconfig.credential", credentialConfig)
+                writeRemoteFile("$aicodeDir/gitconfig.credential", credentialConfig.toByteArray(Charsets.UTF_8))
                 FileLogger.i(TAG, "已注入 git 凭据到远程 $aicodeDir（限定 $wsRoot/）")
             }.onFailure { FileLogger.w(TAG, "注入 git 凭据到远程失败", it) }
         }
@@ -408,33 +415,51 @@ class RemoteSshConnection @Inject constructor(
      * 撤销远程注入：删除 App 管理的三个配置/凭据文件。
      * `GIT_CONFIG_GLOBAL` 指向不存在的文件时 git 静默跳过，注入即失效，服务器用户配置不受影响。
      */
-    suspend fun removeGitCredentialConfig() {
-        val client = sshClient ?: return
-        val home = remoteHome ?: return
+    suspend fun removeGitCredentialConfig() = credentialSyncMutex.withLock {
+        val client = sshClient ?: return@withLock
+        val home = remoteHome ?: return@withLock
         val aicodeDir = home.trimEnd('/') + "/.aicode"
         withContext(Dispatchers.IO) {
             runCatching {
-                val session = client.startSession()
-                session.exec("rm -f '$aicodeDir/gitconfig' '$aicodeDir/gitconfig.credential' '$aicodeDir/git-credentials' '$aicodeDir/git-credential-aicode' 2>/dev/null; echo done").join()
-                session.close()
+                sftpOperationMutex.withLock {
+                    val sftp = sftp()
+                    listOf("gitconfig", "gitconfig.credential", "git-credentials", "git-credential-aicode").forEach { name ->
+                        val path = "$aicodeDir/$name"
+                        if (sftp.statExistence(path) != null) sftp.rm(path)
+                    }
+                }
                 FileLogger.i(TAG, "已撤销远程 git 凭据注入")
             }.onFailure { FileLogger.w(TAG, "撤销远程 git 凭据注入失败", it) }
         }
     }
 
-    /** exec + printf 写一个文本文件到远程（content 为原文，内部转义单引号/反斜杠）。 */
-    private suspend fun writeRemoteFile(client: SSHClient, dest: String, content: String) {
-        if (content.isEmpty()) {
-            // 空内容直接 truncate，避免 printf %s '' 的引号歧义
-            val session = client.startSession()
-            session.exec("printf '' > '$dest'").join()
-            session.close()
-            return
+    private suspend fun writeRemoteFile(
+        dest: String,
+        bytes: ByteArray,
+        executable: Boolean = false,
+        overwrite: Boolean = true
+    ) = sftpOperationMutex.withLock {
+        val client = sftp()
+        val temporary = "$dest.tmp.${UUID.randomUUID()}"
+        try {
+            client.open(temporary, EnumSet.of(OpenMode.WRITE, OpenMode.CREAT, OpenMode.EXCL)).use { file ->
+                client.chmod(temporary, if (executable) 448 else 384)
+                var offset = 0
+                while (offset < bytes.size) {
+                    val count = minOf(32 * 1024, bytes.size - offset)
+                    file.write(offset.toLong(), bytes, offset, count)
+                    offset += count
+                }
+            }
+            check(client.size(temporary) == bytes.size.toLong()) { "Remote file size mismatch" }
+            if (overwrite) {
+                client.rename(temporary, dest, EnumSet.of(RenameFlags.ATOMIC, RenameFlags.OVERWRITE))
+            } else if (client.statExistence(dest) == null) {
+                client.rename(temporary, dest)
+            }
+        } finally {
+            runCatching { client.rm(temporary) }
         }
-        val escaped = content.replace("\\", "\\\\").replace("'", "'\\\"'\"'")
-        val session = client.startSession()
-        session.exec("printf %s '$escaped' > '$dest'").join()
-        session.close()
     }
 
     private fun enc(part: String): String = java.net.URLEncoder.encode(part, "UTF-8")

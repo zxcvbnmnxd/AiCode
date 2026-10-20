@@ -81,6 +81,7 @@
 | --- | --- |
 | 在容器中编译 Android 应用 | 搭 JDK 与 Android SDK，从源码出 APK → [文档](/advanced/build-android-app) |
 | 在容器中编译 Flutter 应用 | 装 JDK、Android SDK 与 Flutter SDK，构建 Flutter debug APK → [文档](/advanced/build-flutter-app) |
+| 在容器中构建 Flutter release APK | 用 qemu 转译补齐 AOT 编译器，本地构建 Flutter release 包 → [文档](/advanced/build-flutter-release) |
 | 安装 Playwright 浏览器自动化 | 容器内装 Chromium 并接入 Playwright MCP，让 AI 操作网页 → [文档](/advanced/playwright-mcp) |
 | 用 adb 无线调试其他设备 | 在容器里用 adb 连接另一台手机或本机，安装应用、抓日志、截屏 → [文档](/advanced/adb-wireless-debug) |
 | 自定义面板 | 用脚本在输入框上方画余额或用量卡片 → [文档](/advanced/dashboard-cards) |

@@ -45,7 +45,7 @@ data class PendingNotification(
  *
  * - **搭车**（首选）：AI 每批工具执行完成后，[StatefulAgentWorkflow][com.aicode.feature.agent.domain.workflow.StatefulAgentWorkflow]
  *   peek 出通知注入工具结果，本轮内立即送达，省掉一次「等本轮结束再起一轮」的 LLM 往返。
- * - **兜底**：AI 整轮没调用任何工具时，ViewModel 在本轮 finally 里 [drain] 后作为系统通知消息触发新一轮。
+ * - **兜底**：AI 整轮没调用任何工具时，ViewModel 在本轮 finally 里 [peek] 后作为系统通知消息触发新一轮，消息落库后 [ack]。
  *
  * 入队来自主线程（ViewModel 收 Flow 事件），peek/ack 来自工具执行的 IO 协程，故全部操作加锁。
  * [peek] 与 [ack] 分两段而非直接取走：通知只有在工具结果真正落库（ToolCallFinished 已发出）后才算送达，

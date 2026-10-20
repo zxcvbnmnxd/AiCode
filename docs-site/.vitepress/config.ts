@@ -172,6 +172,7 @@ export default defineConfig({
           items: [
             { text: '在容器中编译 Android 应用', link: '/advanced/build-android-app' },
             { text: '在容器中编译 Flutter 应用', link: '/advanced/build-flutter-app' },
+            { text: '在容器中构建 Flutter release APK', link: '/advanced/build-flutter-release' },
             { text: '安装 Playwright 浏览器自动化', link: '/advanced/playwright-mcp' }
           ]
         },

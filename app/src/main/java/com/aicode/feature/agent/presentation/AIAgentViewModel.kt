@@ -1454,7 +1454,7 @@ class AIAgentViewModel @Inject constructor(
      * 任何 tool_call 配对，天然不破坏顺序。通知文本带围栏说明，防止 AI 误判为用户的新指令或批准；
      * AI 据此用 terminal(read) 取回完整输出。
      *
-     * 不自行 persist 通知、用 isAutoTrigger=false 走 enqueueAgentRequest 正常流程：由
+     * 不自行 persist 通知、用 isAutoTrigger=false 走通知补送流程：由
      * executeAgentRequestStream 统一 persist 这条 user 消息，workflow 的 InitRequest 追加的同一条
      * UserMessage 即是它，避免重复落库或出现空占位消息。
      */
@@ -1473,17 +1473,8 @@ class AIAgentViewModel @Inject constructor(
      * 避免各处重复判断忙碌/空闲。
      */
     private fun deliverSystemEvent(sessionId: String, item: PendingNotification) {
-        if (sessionJobs[sessionId]?.isActive == true) {
-            agentNotificationCenter.enqueue(sessionId, item)
-            return
-        }
-        viewModelScope.launch {
-            enqueueAgentRequest(
-                request = AgentNotificationFormatter.buildMessage(listOf(item)),
-                projectRoot = _currentWorkspace.value,
-                targetSessionId = sessionId
-            )
-        }
+        agentNotificationCenter.enqueue(sessionId, item)
+        flushPendingNotifications(sessionId)
     }
 
     private fun TabFinishedEvent.toPendingNotification() = PendingNotification(
@@ -1501,16 +1492,16 @@ class AIAgentViewModel @Inject constructor(
      * 已被工具结果搭车送达的通知此时已 ack 移除，取到空则什么都不做。
      */
     private fun flushPendingNotifications(sessionId: String) {
-        val items = agentNotificationCenter.drain(sessionId)
+        if (sessionJobs[sessionId]?.isActive == true || sessionId in _runningCommandSessions.value) return
+        val items = agentNotificationCenter.peek(sessionId)
         if (items.isEmpty()) return
         FileLogger.d(TAG, "flushPendingNotifications: sid=$sessionId items=${items.size} state=${_agentStates.value[sessionId]}")
-        viewModelScope.launch {
-            enqueueAgentRequest(
-                request = AgentNotificationFormatter.buildMessage(items),
-                projectRoot = _currentWorkspace.value,
-                targetSessionId = sessionId
-            )
-        }
+        executeAgentRequestStream(
+            request = AgentNotificationFormatter.buildMessage(items),
+            projectRoot = _currentWorkspace.value,
+            targetSessionId = sessionId,
+            notificationSeqs = items.map { it.seq }
+        )
     }
 
     fun enqueueAgentRequest(
@@ -1661,6 +1652,7 @@ class AIAgentViewModel @Inject constructor(
                 }
             } finally {
                 _runningCommandSessions.value = _runningCommandSessions.value - sessionId
+                flushPendingNotifications(sessionId)
                 processNextInQueue(sessionId)
             }
         }
@@ -1678,7 +1670,8 @@ class AIAgentViewModel @Inject constructor(
         isAutoTrigger: Boolean = false,
         persistUserMessage: Boolean = true,
         /** 子代理等场景：已预设会话标题，跳过首条消息的标题推导/生成，保留预设标题。 */
-        skipTitleUpdate: Boolean = false
+        skipTitleUpdate: Boolean = false,
+        notificationSeqs: List<Long> = emptyList()
     ): Job = viewModelScope.launch {
         val sessionId = targetSessionId ?: ensureSession()
         if (sessionId.isBlank()) {
@@ -1737,7 +1730,14 @@ class AIAgentViewModel @Inject constructor(
             if (!persistUserMessage) {
                 // 目标续跑等内部轮次：不落库、不建检查点，仅把指令作为本轮用户消息发给模型。
             } else if (!isAutoTrigger) {
-                messagePersistenceUseCase.persist(sessionId, MessageRole.USER, request, id = userMsgId, attachments = inputAttachments)
+                if (notificationSeqs.isEmpty()) {
+                    messagePersistenceUseCase.persist(sessionId, MessageRole.USER, request, id = userMsgId, attachments = inputAttachments)
+                } else {
+                    withContext(kotlinx.coroutines.NonCancellable) {
+                        messagePersistenceUseCase.persist(sessionId, MessageRole.USER, request, id = userMsgId, attachments = inputAttachments)
+                        agentNotificationCenter.ack(sessionId, notificationSeqs)
+                    }
+                }
                 checkpointManager.createCheckpoint(sessionId, userMsgId, request)
                 if (isFirst && !skipTitleUpdate) {
                     sessionUseCase.updateTitle(sessionId, sessionUseCase.deriveTitle(request))
@@ -2091,7 +2091,10 @@ class AIAgentViewModel @Inject constructor(
             }
 
             // 本轮未能搭车送达的后台通知：本轮结束且 job 已移除后，合并成一条发送
-            flushPendingNotifications(sessionId)
+            // 补送在落库前失败或被取消时保留队列，避免立即反复重启同一失败请求。
+            if (notificationSeqs.isEmpty() || agentNotificationCenter.peek(sessionId).none { it.seq in notificationSeqs }) {
+                flushPendingNotifications(sessionId)
+            }
 
             // 正常完成时先回到 Idle，再处理队列；队列若有下一轮会重新设 Streaming
             val currentState = _agentStates.value[sessionId]
@@ -2135,10 +2138,10 @@ class AIAgentViewModel @Inject constructor(
     /** 停止当前工作区所有正在运行的 AI 会话（切换工作区前调用）。 */
     fun stopAllAgents() {
         val jobs = sessionJobs.values.filter { it.isActive }
-        jobs.forEach { it.cancel() }
-        sessionJobs.clear()
         agentNotificationCenter.clearAll()
         _queuedRequests.value = emptyMap()
+        jobs.forEach { it.cancel() }
+        sessionJobs.clear()
         goalEmptyTurnCounts.clear()
         _runningCommandSessions.value = emptySet()
         _agentStates.value = _agentStates.value.mapValues { AgentUIState.Idle }
@@ -2199,7 +2202,6 @@ class AIAgentViewModel @Inject constructor(
         // cancel 可能已同步执行完 finally（flush 启动了新 job 并注册到 sessionJobs），
         // 此时不能再覆盖新 job 的状态；仅当无新 job 接管时才做清理。
         if (sessionJobs[sessionId]?.isActive != true) {
-            agentNotificationCenter.clear(sessionId)
             setAgentState(sessionId, AgentUIState.Idle)
         }
         _runningTools.value = _runningTools.value - sessionId
@@ -2704,6 +2706,8 @@ class AIAgentViewModel @Inject constructor(
 
         allDeletedIds.forEach { sid ->
             subAgentEventBus.release(sid)
+            agentNotificationCenter.clear(sid)
+            _queuedRequests.value = _queuedRequests.value - sid
             sessionJobs[sid]?.cancel()
             sessionJobs.remove(sid)
             _agentStates.value = _agentStates.value - sid
@@ -2714,7 +2718,6 @@ class AIAgentViewModel @Inject constructor(
             _queuedRequests.value = _queuedRequests.value - sid
             _inputDrafts.value = _inputDrafts.value - sid
             draftPrefs.edit().remove(sid).apply()
-            agentNotificationCenter.clear(sid)
         }
 
         if (_currentSessionId.value in allDeletedIds) {
@@ -2743,6 +2746,8 @@ class AIAgentViewModel @Inject constructor(
 
         deletedIds.forEach { sid ->
             subAgentEventBus.release(sid)
+            agentNotificationCenter.clear(sid)
+            _queuedRequests.value = _queuedRequests.value - sid
             sessionJobs[sid]?.cancel()
             sessionJobs.remove(sid)
             _agentStates.value = _agentStates.value - sid
@@ -2753,7 +2758,6 @@ class AIAgentViewModel @Inject constructor(
             _queuedRequests.value = _queuedRequests.value - sid
             _inputDrafts.value = _inputDrafts.value - sid
             draftPrefs.edit().remove(sid).apply()
-            agentNotificationCenter.clear(sid)
         }
 
         if (_currentSessionId.value in deletedIds) {
