@@ -138,7 +138,10 @@ internal fun ContainerSection(
     onRestoreBuiltin: () -> Unit = {},
     remoteConnections: List<RemoteConnection> = emptyList(),
     /** 长按拖拽排序落库（顺序即列表存储顺序）。 */
-    onReorder: (fromIndex: Int, toIndex: Int) -> Unit = { _, _ -> }
+    onReorder: (fromIndex: Int, toIndex: Int) -> Unit = { _, _ -> },
+    /** AI 命令是否以 root（Magisk su）模式执行。 */
+    rootCommandMode: Boolean = false,
+    onRootCommandModeChange: (Boolean) -> Unit = {}
 ) {
     val context = LocalContext.current
     // 长按拖拽排序的触感反馈（与「供应商」页一致：进入拖拽与松手各一次）
@@ -188,6 +191,37 @@ internal fun ContainerSection(
             contentPadding = PaddingValues(top = Spacing.sm),
             verticalArrangement = Arrangement.spacedBy(Spacing.sm)
         ) {
+            item(key = "root_command_mode") {
+                Surface(
+                    shape = RoundedCornerShape(Radius.lg),
+                    color = MaterialTheme.semanticColors.cardSurface,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = Spacing.lg, vertical = Spacing.md),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "AI 以 Root 执行命令",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "开启后 AI 通过 Magisk su 直接以 root 执行命令，可读写 /data、其他 App 私有目录；不再使用容器环境",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        AppSwitch(
+                            checked = rootCommandMode,
+                            onCheckedChange = onRootCommandModeChange
+                        )
+                    }
+                }
+            }
             itemsIndexed(
                 items = profiles,
                 key = { _, profile -> profile.id }

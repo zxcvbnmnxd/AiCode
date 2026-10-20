@@ -1021,7 +1021,9 @@ fun SettingsScreen(
                     remoteConnections = remoteConnections,
                     onReorder = { fromIndex, toIndex ->
                         viewModel.reorderContainerProfiles(fromIndex, toIndex)
-                    }
+                    },
+                    rootCommandMode = viewModel.rootCommandMode.collectAsStateWithLifecycle().value,
+                    onRootCommandModeChange = { viewModel.setRootCommandMode(it) }
                 )
                 SettingsSection.ContainerDownloads -> ContainerImageDownloadSection(
                     catalog = imageCatalog,

@@ -102,6 +102,21 @@ class LinuxContainerEngine @Inject constructor(
     @Volatile
     private var currentProfile: ContainerProfile = ContainerProfile.BUILTIN_ALPINE
 
+    /**
+     * AI 命令是否以 root 模式执行（通过 Magisk su）。
+     * 开启后 [startContainerProcess] 走 `su -c` 而非 proot 容器，AI 可读写 /data、其他 App 私有目录。
+     * 默认关闭；开启后容器环境（python/node/git 等）不可用，命令直接在 Android 原生 shell 跑。
+     */
+    @Volatile
+    var rootCommandMode: Boolean = false
+        private set
+
+    /** 切换 AI root 命令模式。 */
+    fun setRootCommandMode(enabled: Boolean) {
+        rootCommandMode = enabled
+        FileLogger.i(TAG, "AI root 命令模式已${if (enabled) "开启" else "关闭"}")
+    }
+
     init {
         CoroutineScope(Dispatchers.IO).launch {
             containerSettingsRepository.activeProfileIdFlow.collect { id ->
@@ -452,6 +467,15 @@ class LinuxContainerEngine @Inject constructor(
      * 否则回退到 Android 原生 shell（rootfs 缺失时的兜底）。
      */
     private fun startContainerProcess(command: String, projectPath: String?): Process {
+        // root 命令模式：直接走 Magisk su，不进 proot 容器，AI 以真 root 执行命令
+        if (rootCommandMode) {
+            FileLogger.i(TAG, "AI root 模式：通过 su 执行命令")
+            val pb = buildProcessBuilder(buildSuInvocation(command))
+            pb.redirectErrorStream(true)
+            pb.redirectInput(STDIN_FROM_DEV_NULL)
+            return pb.start()
+        }
+
         val profile = currentProfile
         val useProot = containerInstaller.isInstalledFor(profile)
 

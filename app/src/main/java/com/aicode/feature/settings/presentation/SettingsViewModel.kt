@@ -397,7 +397,8 @@ class SettingsViewModel @Inject constructor(
     private val apkVerifier: ApkVerifier,
     private val providerDashboardRunner: ProviderDashboardRunner,
     private val terminalSettingsRepository: TerminalSettingsRepository,
-    private val proxySettingsRepository: ProxySettingsRepository
+    private val proxySettingsRepository: ProxySettingsRepository,
+    private val containerEngine: com.aicode.feature.agent.domain.container.LinuxContainerEngine
 ) : ViewModel() {
     private companion object {
         const val MAX_LOG_LINES = 1200
@@ -451,6 +452,15 @@ class SettingsViewModel @Inject constructor(
 
     private val _proxyTestState = MutableStateFlow<ProxyTestUiState>(ProxyTestUiState.Idle)
     val proxyTestState: StateFlow<ProxyTestUiState> = _proxyTestState.asStateFlow()
+
+    /** AI 命令是否以 root（Magisk su）模式执行。 */
+    private val _rootCommandMode = MutableStateFlow(false)
+    val rootCommandMode: StateFlow<Boolean> = _rootCommandMode.asStateFlow()
+
+    fun setRootCommandMode(enabled: Boolean) {
+        _rootCommandMode.value = enabled
+        containerEngine.setRootCommandMode(enabled)
+    }
 
     fun setProxyEnabled(enabled: Boolean) = proxySettingsRepository.setEnabled(enabled)
     fun setProxyType(type: ProxyType) = proxySettingsRepository.setType(type)
