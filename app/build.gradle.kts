@@ -178,8 +178,11 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            if (keystorePropertiesFile.exists()) {
-                signingConfig = signingConfigs.getByName("release")
+            // 没有正式 keystore 时用 debug keystore 签名，方便直接安装测试
+            signingConfig = if (keystorePropertiesFile.exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
             }
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // 可复现构建：AGP 8.3+ 默认往 APK 写 version-control-info.textproto，
