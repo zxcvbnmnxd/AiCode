@@ -1092,8 +1092,8 @@
 
     <!-- Git Conflict -->
     <string name="git_conflicted_count">存在冲突 (%1$s)</string>
-    <string name="git_conflict_detected">检测到合并冲突</string>
-    <string name="git_conflict_hint">请在编辑器中解决冲突后暂存文件，或中止本次合并。</string>
+    <string name="git_merge_pending_title">合并待提交</string>
+    <string name="git_merge_pending_hint">当前没有未解决的冲突。请确认并暂存需要保留的改动，然后提交以完成合并。</string>
     <string name="git_action_abort_merge">中止合并</string>
     <string name="git_abort_merge_confirm">确定中止当前合并吗？未解决的冲突改动将被放弃，工作区将还原到合并前的状态。</string>
 
@@ -1510,6 +1510,11 @@
     <string name="ftp_login_password">登录密码</string>
     <string name="ftp_allow_anonymous">允许匿名访问</string>
     <string name="ftp_anonymous_desc">无需输入用户名和密码即可连接</string>
+    <string name="ftp_anonymous_confirm_title">允许匿名访问？</string>
+    <string name="ftp_anonymous_confirm_message">开启后，同一局域网内任何设备无需凭据即可读写你的工作区，存在被他人访问的风险。</string>
+    <string name="ftp_password_required">请先设置登录用户名与密码</string>
+    <string name="ftp_reserved_username">anonymous 是匿名登录的保留名称，请使用其它用户名</string>
+    <string name="ftp_user_cache_cleanup_failed">无法清理旧 FTP 登录信息，服务未启动，请重试</string>
     <string name="ftp_auto_start">应用启动时自启</string>
     <string name="ftp_auto_start_desc">应用启动时后台自动运行 FTP 服务</string>
     <string name="ftp_config_saved">配置已保存</string>

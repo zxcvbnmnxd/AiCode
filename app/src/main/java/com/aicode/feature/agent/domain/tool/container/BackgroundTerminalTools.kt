@@ -500,12 +500,24 @@ class TerminalSessionTool @Inject constructor(
         if (current == previous) return ""
         if (current.startsWith(previous)) return current.substring(previous.length)
 
+        // 找 previous 后缀与 current 前缀的最长重叠。原实现用 current.take(length) 每次分配子串，
+        // 对长 transcript 是 O(n^2)；改为先比首字符再逐字符比对，无分配。
         val maxOverlap = minOf(previous.length, current.length)
+        val first = current[0]
         for (length in maxOverlap downTo 1) {
-            if (previous.endsWith(current.take(length))) {
+            val start = previous.length - length
+            if (previous[start] != first) continue
+            if (regionMatches(previous, start, current, length)) {
                 return current.substring(length)
             }
         }
         return current
+    }
+
+    private fun regionMatches(a: String, aOffset: Int, b: String, length: Int): Boolean {
+        for (i in 1 until length) {
+            if (a[aOffset + i] != b[i]) return false
+        }
+        return true
     }
 }

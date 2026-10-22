@@ -1092,8 +1092,8 @@
 
     <!-- Git Conflict -->
     <string name="git_conflicted_count">Conflicts (%1$s)</string>
-    <string name="git_conflict_detected">Merge Conflicts Detected</string>
-    <string name="git_conflict_hint">Resolve conflicts in editor then stage the files, or abort the merge.</string>
+    <string name="git_merge_pending_title">Merge Awaiting Commit</string>
+    <string name="git_merge_pending_hint">There are no unresolved conflicts. Review and stage the changes you want to keep, then commit to complete the merge.</string>
     <string name="git_action_abort_merge">Abort Merge</string>
     <string name="git_abort_merge_confirm">Abort the current merge? Unresolved changes will be discarded and the working tree will be restored.</string>
 
@@ -1510,6 +1510,11 @@
     <string name="ftp_login_password">Login Password</string>
     <string name="ftp_allow_anonymous">Allow Anonymous</string>
     <string name="ftp_anonymous_desc">Connect without username and password</string>
+    <string name="ftp_anonymous_confirm_title">Allow anonymous access?</string>
+    <string name="ftp_anonymous_confirm_message">Once enabled, any device on the same LAN can read and write your workspace without credentials.</string>
+    <string name="ftp_password_required">Set a username and password first</string>
+    <string name="ftp_reserved_username">anonymous is reserved for anonymous login. Use a different username.</string>
+    <string name="ftp_user_cache_cleanup_failed">Could not clear old FTP login data. The server was not started. Try again.</string>
     <string name="ftp_auto_start">Auto-start on app launch</string>
     <string name="ftp_auto_start_desc">Automatically start FTP service in background on app launch</string>
     <string name="ftp_config_saved">Configuration saved</string>

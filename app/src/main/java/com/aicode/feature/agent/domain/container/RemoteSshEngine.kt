@@ -4,6 +4,7 @@ import com.aicode.core.util.BoundedLineReader
 import com.aicode.core.util.FileLogger
 import com.aicode.core.util.LINE_TRUNCATED_NOTE
 import com.aicode.feature.agent.domain.container.CommandEngine
+import com.aicode.feature.agent.domain.tool.explorer.shellQuote
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -250,6 +251,6 @@ class RemoteSshEngine @Inject constructor(
     private fun buildCdCommand(command: String, projectPath: String?): String {
         val prefix = "export GIT_CONFIG_GLOBAL=\"\$HOME/.aicode/gitconfig\"; "
         if (projectPath == null) return prefix + command
-        return prefix + "cd ~/workspace 2>/dev/null || cd '$projectPath' 2>/dev/null; $command"
+        return prefix + "cd ~/workspace 2>/dev/null || cd ${shellQuote(projectPath)} 2>/dev/null; $command"
     }
 }

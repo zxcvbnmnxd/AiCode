@@ -66,6 +66,7 @@ import com.aicode.feature.agent.domain.workflow.AgentWorkflow
 import com.aicode.feature.terminal.domain.TabFinishedEvent
 import com.aicode.feature.terminal.domain.TerminalKeepaliveService
 import com.aicode.feature.terminal.domain.TerminalSessionManager
+import com.aicode.feature.terminal.domain.TerminalSessionProvider
 import com.aicode.feature.terminal.domain.takeTailLines
 import com.aicode.feature.workspace.domain.FileAccessProvider
 import com.aicode.feature.workspace.domain.FileEntry
@@ -153,6 +154,7 @@ class AIAgentViewModel @Inject constructor(
     private val messagePersistenceUseCase: MessagePersistenceUseCase,
     private val planApprovalManager: PlanApprovalManager,
     private val terminalSessionManager: TerminalSessionManager,
+    private val terminalSessionProvider: TerminalSessionProvider,
     private val slashCommandRegistry: SlashCommandRegistry,
     private val fileMentionRepository: FileMentionRepository,
     private val checkpointManager: CheckpointManager,
@@ -1209,7 +1211,7 @@ class AIAgentViewModel @Inject constructor(
         // 订阅后台命令完成事件：notify=true 的命令结束后自动注入消息并触发 AI 新一轮。
         // 会话忙碌期间到达的事件会被缓存，待本轮结束后合并成一条发送（见 [flushMergedNotifications]）。
         viewModelScope.launch {
-            terminalSessionManager.tabFinishedEvents.collect { event ->
+            terminalSessionProvider.tabFinishedEvents.collect { event ->
                 handleBackgroundCommandFinished(event)
             }
         }
@@ -1238,15 +1240,19 @@ class AIAgentViewModel @Inject constructor(
             combine(
                 awaitingPermissionSessionIds,
                 askUserQuestionManager.pendingQuestion,
-                planApprovalManager.pendingApproval
-            ) { awaiting, question, plan ->
-                val labels = LinkedHashMap<String, Pair<Int, ApprovalKind>>()
-                awaiting.forEach { labels[it] = R.string.notification_approval_label_permission to ApprovalKind.PERMISSION }
+                planApprovalManager.pendingApproval,
+                toolPermissionManager.pendingRequest
+            ) { awaiting, question, plan, permission ->
+                val labels = LinkedHashMap<String, Triple<Int, ApprovalKind, String?>>()
+                awaiting.forEach {
+                    labels[it] = Triple(R.string.notification_approval_label_permission, ApprovalKind.PERMISSION,
+                        permission?.takeIf { request -> request.sessionId == it }?.id)
+                }
                 question?.sessionId?.takeIf { it.isNotBlank() }?.let {
-                    labels.putIfAbsent(it, R.string.notification_approval_label_question to ApprovalKind.QUESTION)
+                    labels.putIfAbsent(it, Triple(R.string.notification_approval_label_question, ApprovalKind.QUESTION, null))
                 }
                 plan?.sessionId?.takeIf { it.isNotBlank() }?.let {
-                    labels.putIfAbsent(it, R.string.notification_approval_label_plan to ApprovalKind.PLAN)
+                    labels.putIfAbsent(it, Triple(R.string.notification_approval_label_plan, ApprovalKind.PLAN, plan.id))
                 }
                 labels
             }.collect { labels ->
@@ -1256,7 +1262,8 @@ class AIAgentViewModel @Inject constructor(
                         sessionId = sid,
                         sessionTitle = session.title.ifBlank { context.getString(R.string.chat_new_session_btn) },
                         label = context.getString(info.first),
-                        kind = info.second
+                        kind = info.second,
+                        requestId = info.third
                     )
                 }
                 agentApprovalNotificationManager.update(pending)
@@ -2158,9 +2165,9 @@ class AIAgentViewModel @Inject constructor(
         val jobs = sessionJobs.values.filter { it.isActive }
         agentNotificationCenter.clearAll()
         _queuedRequests.value = emptyMap()
+        goalEmptyTurnCounts.clear()
         jobs.forEach { it.cancel() }
         sessionJobs.clear()
-        goalEmptyTurnCounts.clear()
         _runningCommandSessions.value = emptySet()
         _agentStates.value = _agentStates.value.mapValues { AgentUIState.Idle }
         _streamingTexts.value = emptyMap()
