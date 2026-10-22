@@ -148,6 +148,8 @@ internal fun ChatInputBar(
     onSend: () -> Unit,
     /** 回车键是否直接发送：开启后 IME 回车键变为「发送」，关闭则回车换行（默认）。 */
     enterToSend: Boolean = false,
+    /** 输入框圆角（dp），默认 16。 */
+    inputCornerRadius: Int = 16,
     onStop: () -> Unit,
     isBusy: Boolean,
     workspaceViewModel: WorkspaceViewModel?,
@@ -472,12 +474,12 @@ internal fun ChatInputBar(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(Radius.lg))
+                    .clip(RoundedCornerShape(inputCornerRadius.dp))
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.98f))
                     .border(
                         1.dp,
                         MaterialTheme.colorScheme.outlineVariant,
-                        RoundedCornerShape(Radius.lg)
+                        RoundedCornerShape(inputCornerRadius.dp)
                     )
                     .padding(horizontal = Spacing.sm, vertical = Spacing.xs)
             ) {
