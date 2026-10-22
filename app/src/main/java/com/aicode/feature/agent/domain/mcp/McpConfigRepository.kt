@@ -266,6 +266,7 @@ class McpConfigRepository @Inject constructor(
                         }
                     }
                     put("enabled", server.enabled)
+                    put("useRoot", server.useRoot)
                     if (server.disabledTools.isNotEmpty()) {
                         putJsonArray("disabledTools") { server.disabledTools.forEach { add(it) } }
                     }
@@ -286,6 +287,7 @@ class McpConfigRepository @Inject constructor(
         return servers.mapNotNull { (name, element) ->
             val obj = element as? JsonObject ?: return@mapNotNull null
             val enabled = (obj["enabled"] as? JsonPrimitive)?.booleanOrNull ?: true
+            val useRoot = (obj["useRoot"] as? JsonPrimitive)?.booleanOrNull ?: false
 
             val command = (obj["command"] as? JsonPrimitive)?.contentOrNull
             val url = (obj["url"] as? JsonPrimitive)?.contentOrNull
@@ -308,7 +310,8 @@ class McpConfigRepository @Inject constructor(
                         args = args,
                         env = env,
                         enabled = enabled,
-                        disabledTools = disabledTools
+                        disabledTools = disabledTools,
+                        useRoot = useRoot
                     )
                 }
                 !url.isNullOrBlank() -> {
