@@ -115,11 +115,26 @@ class LinuxContainerEngine @Inject constructor(
         context.getSharedPreferences("aicode_root_prefs", android.content.Context.MODE_PRIVATE)
     }
 
-    /** 切换 AI root 命令模式。 */
+    /** 切换 AI root 命令模式。开启时自动申请一次 su 触发 Magisk 授权弹窗。 */
     fun setRootCommandMode(enabled: Boolean) {
         rootCommandMode = enabled
         prefs.edit().putBoolean("root_command_mode", enabled).apply()
         FileLogger.i(TAG, "AI root 命令模式已${if (enabled) "开启" else "关闭"}")
+        // 开启时自动跑一次 su，触发 Magisk 授权弹窗，用户提前授权
+        if (enabled) {
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val invocation = buildSuInvocation("id")
+                    val pb = ProcessBuilder(invocation.argv)
+                    pb.redirectErrorStream(true)
+                    val process = pb.start()
+                    process.waitFor()
+                    FileLogger.i(TAG, "预授权 su 成功，退出码=${process.exitValue()}")
+                } catch (e: Exception) {
+                    FileLogger.w(TAG, "预授权 su 失败: ${e.message}")
+                }
+            }
+        }
     }
 
     init {

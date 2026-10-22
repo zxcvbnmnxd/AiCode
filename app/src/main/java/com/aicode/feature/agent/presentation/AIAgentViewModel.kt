@@ -1998,7 +1998,7 @@ class AIAgentViewModel @Inject constructor(
                             try {
                                 if (generalSettingsRepository.soundOnErrorFlow.first()) {
                                     val path = generalSettingsRepository.soundErrorPathFlow.first()
-                                    com.aicode.core.util.SoundPlayer.play(context, path)
+                                    com.aicode.core.util.SoundPlayer.play(context, path.ifBlank { "error" })
                                 }
                             } catch (_: Exception) {}
                         }
@@ -2043,7 +2043,7 @@ class AIAgentViewModel @Inject constructor(
                             try {
                                 if (generalSettingsRepository.soundOnCompleteFlow.first()) {
                                     val path = generalSettingsRepository.soundCompletePathFlow.first()
-                                    com.aicode.core.util.SoundPlayer.play(context, path)
+                                    com.aicode.core.util.SoundPlayer.play(context, path.ifBlank { "complete" })
                                 }
                             } catch (_: Exception) {}
                         }
