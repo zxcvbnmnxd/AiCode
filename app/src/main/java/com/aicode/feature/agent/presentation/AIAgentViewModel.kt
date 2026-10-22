@@ -1993,6 +1993,15 @@ class AIAgentViewModel @Inject constructor(
                         failed = true
                         setCompacting(sessionId, false)
                         setAgentState(sessionId, AgentUIState.Error(describeFailure(event)))
+                        // 播放错误提示音
+                        viewModelScope.launch {
+                            try {
+                                if (generalSettingsRepository.soundOnErrorFlow.first()) {
+                                    val path = generalSettingsRepository.soundErrorPathFlow.first()
+                                    com.aicode.core.util.SoundPlayer.play(context, path)
+                                }
+                            } catch (_: Exception) {}
+                        }
                         // 子代理会话失败时通知父会话
                         if (isSub) {
                             sessionUseCase.getSessionById(sessionId)?.parentId?.let { parentId ->
@@ -2028,6 +2037,15 @@ class AIAgentViewModel @Inject constructor(
                             .isAtLeast(Lifecycle.State.STARTED)
                         if (!inForeground && agentSoundSettings.isEnabled()) {
                             showAgentCompletedNotification(modelRequest)
+                        }
+                        // 播放完成提示音
+                        viewModelScope.launch {
+                            try {
+                                if (generalSettingsRepository.soundOnCompleteFlow.first()) {
+                                    val path = generalSettingsRepository.soundCompletePathFlow.first()
+                                    com.aicode.core.util.SoundPlayer.play(context, path)
+                                }
+                            } catch (_: Exception) {}
                         }
                     }
                     is AgentEvent.ModeChanged -> {

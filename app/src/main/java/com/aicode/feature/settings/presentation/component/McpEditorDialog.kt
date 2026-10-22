@@ -110,6 +110,7 @@ fun McpServerEditDialog(
 
     // stdio 形态字段
     var command by remember { mutableStateOf(initial?.command ?: "") }
+    var useRoot by remember { mutableStateOf(initial?.useRoot ?: false) }
     val argsList = remember {
         mutableStateListOf<String>().apply { addAll(initial?.args ?: emptyList()) }
     }
@@ -142,7 +143,8 @@ fun McpServerEditDialog(
                     .filter { it.first.isNotEmpty() }
                     .toMap(),
                 enabled = enabled,
-                disabledTools = disabledToolsSet.toSet()
+                disabledTools = disabledToolsSet.toSet(),
+                useRoot = useRoot
             )
         } else {
             McpServerConfig(
@@ -344,6 +346,24 @@ fun McpServerEditDialog(
                                     args = argsList,
                                     env = envList
                                 )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "使用 Root 运行",
+                                            style = MaterialTheme.typography.bodyLarge
+                                        )
+                                        Text(
+                                            text = "通过 Magisk su 启动，访问手机系统目录",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    AppSwitch(checked = useRoot, onCheckedChange = { useRoot = it })
+                                }
                             } else {
                                 McpHttpFields(
                                     url = url,

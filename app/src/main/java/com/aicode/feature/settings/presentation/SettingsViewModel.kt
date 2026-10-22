@@ -599,6 +599,16 @@ class SettingsViewModel @Inject constructor(
     private val _deleteExternalWorkspaceSessions = MutableStateFlow(false)
     val deleteExternalWorkspaceSessions: StateFlow<Boolean> = _deleteExternalWorkspaceSessions.asStateFlow()
 
+    // 提示音设置
+    private val _soundOnComplete = MutableStateFlow(false)
+    val soundOnComplete: StateFlow<Boolean> = _soundOnComplete.asStateFlow()
+    private val _soundOnError = MutableStateFlow(false)
+    val soundOnError: StateFlow<Boolean> = _soundOnError.asStateFlow()
+    private val _soundCompletePath = MutableStateFlow("")
+    val soundCompletePath: StateFlow<String> = _soundCompletePath.asStateFlow()
+    private val _soundErrorPath = MutableStateFlow("")
+    val soundErrorPath: StateFlow<String> = _soundErrorPath.asStateFlow()
+
     private val _themeMode = MutableStateFlow(AppThemeMode.AUTO)
     val themeMode: StateFlow<AppThemeMode> = _themeMode.asStateFlow()
 
@@ -1010,6 +1020,27 @@ class SettingsViewModel @Inject constructor(
             launch {
                 generalSettingsRepository.deleteExternalWorkspaceSessionsFlow.collectLatest {
                     _deleteExternalWorkspaceSessions.value = it
+                }
+            }
+
+            launch {
+                generalSettingsRepository.soundOnCompleteFlow.collectLatest {
+                    _soundOnComplete.value = it
+                }
+            }
+            launch {
+                generalSettingsRepository.soundOnErrorFlow.collectLatest {
+                    _soundOnError.value = it
+                }
+            }
+            launch {
+                generalSettingsRepository.soundCompletePathFlow.collectLatest {
+                    _soundCompletePath.value = it
+                }
+            }
+            launch {
+                generalSettingsRepository.soundErrorPathFlow.collectLatest {
+                    _soundErrorPath.value = it
                 }
             }
 
@@ -2053,6 +2084,30 @@ class SettingsViewModel @Inject constructor(
     fun setDeleteExternalWorkspaceSessions(enabled: Boolean) {
         viewModelScope.launch {
             generalSettingsRepository.setDeleteExternalWorkspaceSessions(enabled)
+        }
+    }
+
+    fun setSoundOnComplete(enabled: Boolean) {
+        viewModelScope.launch {
+            generalSettingsRepository.setSoundOnComplete(enabled)
+        }
+    }
+
+    fun setSoundOnError(enabled: Boolean) {
+        viewModelScope.launch {
+            generalSettingsRepository.setSoundOnError(enabled)
+        }
+    }
+
+    fun setSoundCompletePath(path: String) {
+        viewModelScope.launch {
+            generalSettingsRepository.setSoundCompletePath(path)
+        }
+    }
+
+    fun setSoundErrorPath(path: String) {
+        viewModelScope.launch {
+            generalSettingsRepository.setSoundErrorPath(path)
         }
     }
 

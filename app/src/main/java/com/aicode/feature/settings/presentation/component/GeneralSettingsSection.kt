@@ -65,7 +65,15 @@ internal fun GeneralSettingsSection(
     goalMaxTokens: Int,
     onSetGoalMaxTokens: (Int) -> Unit,
     deleteExternalWorkspaceSessions: Boolean,
-    onToggleDeleteExternalWorkspaceSessions: (Boolean) -> Unit
+    onToggleDeleteExternalWorkspaceSessions: (Boolean) -> Unit,
+    soundOnComplete: Boolean,
+    onToggleSoundOnComplete: (Boolean) -> Unit,
+    soundOnError: Boolean,
+    onToggleSoundOnError: (Boolean) -> Unit,
+    soundCompletePath: String,
+    onSetSoundCompletePath: (String) -> Unit,
+    soundErrorPath: String,
+    onSetSoundErrorPath: (String) -> Unit
 ) {
     var showStartupSessionSheet by remember { mutableStateOf(false) }
     var editingFirstByteTimeout by remember { mutableStateOf(false) }
@@ -247,6 +255,47 @@ internal fun GeneralSettingsSection(
                     )
                 }
             )
+        }
+
+        SettingsGroupHeader(text = "提示音")
+        SettingsGroup {
+            SettingsRow(
+                icon = null,
+                title = "完成提示音",
+                subtitle = "AI 完成任务时播放",
+                onClick = { onToggleSoundOnComplete(!soundOnComplete) },
+                trailing = {
+                    AppSwitch(checked = soundOnComplete, onCheckedChange = onToggleSoundOnComplete)
+                }
+            )
+            if (soundOnComplete) {
+                SettingsDivider()
+                SettingsRow(
+                    icon = null,
+                    title = "音频路径",
+                    subtitle = if (soundCompletePath.isBlank()) "默认提示音" else soundCompletePath,
+                    onClick = { /* TODO: 加路径输入对话框 */ }
+                )
+            }
+            SettingsDivider()
+            SettingsRow(
+                icon = null,
+                title = "错误提示音",
+                subtitle = "AI 出错时播放",
+                onClick = { onToggleSoundOnError(!soundOnError) },
+                trailing = {
+                    AppSwitch(checked = soundOnError, onCheckedChange = onToggleSoundOnError)
+                }
+            )
+            if (soundOnError) {
+                SettingsDivider()
+                SettingsRow(
+                    icon = null,
+                    title = "音频路径",
+                    subtitle = if (soundErrorPath.isBlank()) "默认提示音" else soundErrorPath,
+                    onClick = { /* TODO: 加路径输入对话框 */ }
+                )
+            }
         }
     }
 

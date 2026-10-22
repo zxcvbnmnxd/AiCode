@@ -53,6 +53,12 @@ class GeneralSettingsRepository @Inject constructor(
         /** 「提示词」页使用说明公告已展示内容的哈希；无值或与当前内容哈希不一致时重新弹出。 */
         val PROMPTS_ANNOUNCEMENT_SHOWN_HASH_KEY = stringPreferencesKey("prompts_announcement_shown_hash")
 
+        // 提示音设置
+        val SOUND_ON_COMPLETE_KEY = booleanPreferencesKey("sound_on_complete")
+        val SOUND_ON_ERROR_KEY = booleanPreferencesKey("sound_on_error")
+        val SOUND_COMPLETE_PATH_KEY = stringPreferencesKey("sound_complete_path")
+        val SOUND_ERROR_PATH_KEY = stringPreferencesKey("sound_error_path")
+
         /** 首字超时默认 5 分钟，与原硬编码值一致。 */
         const val DEFAULT_FIRST_BYTE_TIMEOUT_SEC = 300
 
@@ -258,4 +264,38 @@ class GeneralSettingsRepository @Inject constructor(
     suspend fun deleteExternalWorkspaceSessionsSnapshot(): Boolean = deleteExternalWorkspaceSessionsFlow.first()
 
     suspend fun restoreDeleteExternalWorkspaceSessions(enabled: Boolean) = setDeleteExternalWorkspaceSessions(enabled)
+
+    // ===== 提示音设置 =====
+
+    /** AI 正常完成任务时播放提示音；默认关闭。 */
+    val soundOnCompleteFlow: Flow<Boolean> =
+        context.generalDataStore.data.map { it[SOUND_ON_COMPLETE_KEY] ?: false }
+
+    suspend fun setSoundOnComplete(enabled: Boolean) {
+        context.generalDataStore.edit { it[SOUND_ON_COMPLETE_KEY] = enabled }
+    }
+
+    /** AI 出错时播放提示音；默认关闭。 */
+    val soundOnErrorFlow: Flow<Boolean> =
+        context.generalDataStore.data.map { it[SOUND_ON_ERROR_KEY] ?: false }
+
+    suspend fun setSoundOnError(enabled: Boolean) {
+        context.generalDataStore.edit { it[SOUND_ON_ERROR_KEY] = enabled }
+    }
+
+    /** 完成提示音文件路径；默认空（用系统默认提示音）。 */
+    val soundCompletePathFlow: Flow<String> =
+        context.generalDataStore.data.map { it[SOUND_COMPLETE_PATH_KEY] ?: "" }
+
+    suspend fun setSoundCompletePath(path: String) {
+        context.generalDataStore.edit { it[SOUND_COMPLETE_PATH_KEY] = path }
+    }
+
+    /** 错误提示音文件路径；默认空（用系统默认提示音）。 */
+    val soundErrorPathFlow: Flow<String> =
+        context.generalDataStore.data.map { it[SOUND_ERROR_PATH_KEY] ?: "" }
+
+    suspend fun setSoundErrorPath(path: String) {
+        context.generalDataStore.edit { it[SOUND_ERROR_PATH_KEY] = path }
+    }
 }

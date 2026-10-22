@@ -40,6 +40,7 @@ class StdioTransport(
     private val projectPath: String?,
     private val extraEnv: Map<String, String> = emptyMap(),
     private val runtimeProfile: ContainerProfile = ContainerProfile.BUILTIN_ALPINE,
+    private val useRoot: Boolean = false,
     private val json: Json = DEFAULT_JSON
 ) : McpTransport {
 
@@ -123,9 +124,25 @@ class StdioTransport(
         if (process != null) return@withLock
         if (closed) throw McpException(message = "[$serverName] transport 已关闭")
 
-        FileLogger.i(TAG, "[$serverName] 启动 stdio server: $program ${programArgs.joinToString(" ")}")
+        FileLogger.i(TAG, "[$serverName] 启动 stdio server: $program ${programArgs.joinToString(" ")}${if (useRoot) " (root 模式)" else ""}")
         val p = try {
-            engine.startStdioProcess(program, programArgs, projectPath, extraEnv, runtimeProfile)
+            if (useRoot) {
+                // root 模式：直接走 su，不进 proot 容器，工作目录用手机路径
+                val fullCommand = buildString {
+                    if (!projectPath.isNullOrBlank() && projectPath.startsWith("/")) {
+                        append("cd '$projectPath' && ")
+                    }
+                    append(program)
+                    programArgs.forEach { append(" '$it'") }
+                }
+                val invocation = engine.buildSuInvocation(fullCommand, projectPath)
+                val pb = ProcessBuilder(invocation.argv)
+                pb.environment().putAll(invocation.env)
+                pb.redirectErrorStream(false)
+                pb.start()
+            } else {
+                engine.startStdioProcess(program, programArgs, projectPath, extraEnv, runtimeProfile)
+            }
         } catch (e: Exception) {
             throw McpException(message = "[$serverName] 启动子进程失败: ${e.message}", cause = e)
         }

@@ -238,6 +238,10 @@ fun SettingsScreen(
     val goalMaxTurns by viewModel.goalMaxTurns.collectAsStateWithLifecycle()
     val goalMaxTokens by viewModel.goalMaxTokens.collectAsStateWithLifecycle()
     val deleteExternalWorkspaceSessions by viewModel.deleteExternalWorkspaceSessions.collectAsStateWithLifecycle()
+    val soundOnComplete by viewModel.soundOnComplete.collectAsStateWithLifecycle()
+    val soundOnError by viewModel.soundOnError.collectAsStateWithLifecycle()
+    val soundCompletePath by viewModel.soundCompletePath.collectAsStateWithLifecycle()
+    val soundErrorPath by viewModel.soundErrorPath.collectAsStateWithLifecycle()
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val themePresetId by viewModel.themePresetId.collectAsStateWithLifecycle()
     val dynamicColorEnabled by viewModel.dynamicColorEnabled.collectAsStateWithLifecycle()
@@ -869,7 +873,15 @@ fun SettingsScreen(
                     goalMaxTokens = goalMaxTokens,
                     onSetGoalMaxTokens = { viewModel.setGoalMaxTokens(it) },
                     deleteExternalWorkspaceSessions = deleteExternalWorkspaceSessions,
-                    onToggleDeleteExternalWorkspaceSessions = { viewModel.setDeleteExternalWorkspaceSessions(it) }
+                    onToggleDeleteExternalWorkspaceSessions = { viewModel.setDeleteExternalWorkspaceSessions(it) },
+                    soundOnComplete = soundOnComplete,
+                    onToggleSoundOnComplete = { viewModel.setSoundOnComplete(it) },
+                    soundOnError = soundOnError,
+                    onToggleSoundOnError = { viewModel.setSoundOnError(it) },
+                    soundCompletePath = soundCompletePath,
+                    onSetSoundCompletePath = { viewModel.setSoundCompletePath(it) },
+                    soundErrorPath = soundErrorPath,
+                    onSetSoundErrorPath = { viewModel.setSoundErrorPath(it) }
                 )
                 SettingsSection.Providers -> ProvidersSection(
                     providers = providers,

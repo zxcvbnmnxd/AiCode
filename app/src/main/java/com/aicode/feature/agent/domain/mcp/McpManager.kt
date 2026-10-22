@@ -148,7 +148,8 @@ class McpManager @Inject constructor(
                     programArgs = cfg.args,
                     projectPath = workspaceRepository.currentPath(),
                     extraEnv = cfg.env,
-                    runtimeProfile = runtimeProfile
+                    runtimeProfile = runtimeProfile,
+                    useRoot = cfg.useRoot
                 )
             } else {
                 StreamableHttpTransport(

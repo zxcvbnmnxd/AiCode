@@ -13,7 +13,8 @@ data class McpServerConfig(
     val env: Map<String, String> = emptyMap(),
     val enabled: Boolean = true,
     val disabledTools: Set<String> = emptySet(),
-    val auth: McpAuthConfig? = null
+    val auth: McpAuthConfig? = null,
+    val useRoot: Boolean = false
 ) {
     val isStdio: Boolean get() = !command.isNullOrBlank()
 
