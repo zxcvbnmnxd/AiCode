@@ -16,19 +16,23 @@ object SoundPlayer {
 
     suspend fun play(context: Context, soundPath: String?) {
         withContext(Dispatchers.IO) {
+            var player: MediaPlayer? = null
             try {
-                val player = if (!soundPath.isNullOrBlank() && File(soundPath).exists()) {
-                    // 用户自定义路径
-                    MediaPlayer().apply {
-                        setDataSource(context, Uri.fromFile(File(soundPath)))
+                player = when {
+                    !soundPath.isNullOrBlank() && File(soundPath).exists() -> {
+                        // 用户自定义路径
+                        MediaPlayer().apply {
+                            setDataSource(context, Uri.fromFile(File(soundPath)))
+                        }
                     }
-                } else {
-                    // 默认从 assets 读取
-                    val afd = context.assets.openFd(if (soundPath == "error") "sounds/error.wav" else "sounds/complete.wav")
-                        ?: return@withContext
-                    MediaPlayer().apply {
-                        setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
-                        afd.close()
+                    else -> {
+                        // 默认从 assets 读取（soundPath 传 "complete" 或 "error"）
+                        val assetName = if (soundPath == "error") "sounds/error.wav" else "sounds/complete.wav"
+                        val afd = context.assets.openFd(assetName)
+                        MediaPlayer().apply {
+                            setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+                            afd.close()
+                        }
                     }
                 }
                 player.apply {
@@ -41,8 +45,10 @@ object SoundPlayer {
                     }
                     start()
                 }
+                FileLogger.i(TAG, "提示音播放成功: $soundPath")
             } catch (e: Exception) {
                 FileLogger.e(TAG, "播放音频失败: ${e.message}", e)
+                player?.release()
             }
         }
     }

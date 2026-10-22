@@ -437,7 +437,7 @@ class SystemPromptProvider @Inject constructor(
         PromptFragmentResolver.parseNumber(name)
             ?.let { number -> readFileOrNull(customFragmentsByNumber[number])?.let { return it } }
         readFileOrNull(File(customDir, name))?.let { return it }
-        readFileOrNull(File(File(containerInstaller.aicodeDir, "prompts"), name))?.let { return it }
+        // 优先用 assets 最新版本，不用本地副本（本地副本可能是旧的）
         return context.assets.open("prompts/$name").bufferedReader().use { it.readText() }
     }
 

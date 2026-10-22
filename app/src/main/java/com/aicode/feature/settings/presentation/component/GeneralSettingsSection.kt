@@ -83,6 +83,8 @@ internal fun GeneralSettingsSection(
     var editingSendFileMaxSize by remember { mutableStateOf(false) }
     var editingGoalMaxTurns by remember { mutableStateOf(false) }
     var editingGoalMaxTokens by remember { mutableStateOf(false) }
+    var editingCompletePath by remember { mutableStateOf(false) }
+    var editingErrorPath by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -274,7 +276,7 @@ internal fun GeneralSettingsSection(
                     icon = null,
                     title = "音频路径",
                     subtitle = if (soundCompletePath.isBlank()) "默认提示音" else soundCompletePath,
-                    onClick = { /* TODO: 加路径输入对话框 */ }
+                    onClick = { editingCompletePath = true }
                 )
             }
             SettingsDivider()
@@ -293,7 +295,7 @@ internal fun GeneralSettingsSection(
                     icon = null,
                     title = "音频路径",
                     subtitle = if (soundErrorPath.isBlank()) "默认提示音" else soundErrorPath,
-                    onClick = { /* TODO: 加路径输入对话框 */ }
+                    onClick = { editingErrorPath = true }
                 )
             }
         }
@@ -403,6 +405,32 @@ internal fun GeneralSettingsSection(
                 editingGoalMaxTokens = false
             },
             onDismiss = { editingGoalMaxTokens = false }
+        )
+    }
+
+    if (editingCompletePath) {
+        PathInputDialog(
+            title = "完成提示音路径",
+            initialValue = soundCompletePath,
+            hint = "留空用默认提示音，如 /sdcard/Download/notify.mp3",
+            onConfirm = {
+                onSetSoundCompletePath(it)
+                editingCompletePath = false
+            },
+            onDismiss = { editingCompletePath = false }
+        )
+    }
+
+    if (editingErrorPath) {
+        PathInputDialog(
+            title = "错误提示音路径",
+            initialValue = soundErrorPath,
+            hint = "留空用默认提示音，如 /sdcard/Download/error.mp3",
+            onConfirm = {
+                onSetSoundErrorPath(it)
+                editingErrorPath = false
+            },
+            onDismiss = { editingErrorPath = false }
         )
     }
 }
@@ -530,4 +558,38 @@ private fun StartupSessionMode.labelRes(): Int = when (this) {
 private fun StartupSessionMode.descRes(): Int = when (this) {
     StartupSessionMode.NEW_SESSION -> R.string.settings_startup_session_new_desc
     StartupSessionMode.RECENT_SESSION -> R.string.settings_startup_session_recent_desc
+}
+
+@Composable
+private fun PathInputDialog(
+    title: String,
+    initialValue: String,
+    hint: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var text by remember { mutableStateOf(initialValue) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        title = { Text(title) },
+        text = {
+            AppTextField(
+                value = text,
+                onValueChange = { text = it },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                supportingText = { Text(hint) }
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(text.trim()) }) {
+                Text(stringResource(R.string.common_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.common_cancel))
+            }
+        }
+    )
 }
