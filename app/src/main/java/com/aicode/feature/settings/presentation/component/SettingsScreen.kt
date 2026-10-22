@@ -242,6 +242,7 @@ fun SettingsScreen(
     val soundOnError by viewModel.soundOnError.collectAsStateWithLifecycle()
     val soundCompletePath by viewModel.soundCompletePath.collectAsStateWithLifecycle()
     val soundErrorPath by viewModel.soundErrorPath.collectAsStateWithLifecycle()
+    val inputCornerRadius by viewModel.inputCornerRadius.collectAsStateWithLifecycle()
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val themePresetId by viewModel.themePresetId.collectAsStateWithLifecycle()
     val dynamicColorEnabled by viewModel.dynamicColorEnabled.collectAsStateWithLifecycle()
@@ -881,7 +882,9 @@ fun SettingsScreen(
                     soundCompletePath = soundCompletePath,
                     onSetSoundCompletePath = { viewModel.setSoundCompletePath(it) },
                     soundErrorPath = soundErrorPath,
-                    onSetSoundErrorPath = { viewModel.setSoundErrorPath(it) }
+                    onSetSoundErrorPath = { viewModel.setSoundErrorPath(it) },
+                    inputCornerRadius = inputCornerRadius,
+                    onSetInputCornerRadius = { viewModel.setInputCornerRadius(it) }
                 )
                 SettingsSection.Providers -> ProvidersSection(
                     providers = providers,

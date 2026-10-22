@@ -139,7 +139,7 @@ internal fun ContainerSection(
     remoteConnections: List<RemoteConnection> = emptyList(),
     /** 长按拖拽排序落库（顺序即列表存储顺序）。 */
     onReorder: (fromIndex: Int, toIndex: Int) -> Unit = { _, _ -> },
-    /** AI 命令是否以 root（Magisk su）模式执行。 */
+    /** AI 命令是否以 root（root su）模式执行。 */
     rootCommandMode: Boolean = false,
     onRootCommandModeChange: (Boolean) -> Unit = {}
 ) {
@@ -210,7 +210,7 @@ internal fun ContainerSection(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "开启后 AI 通过 Magisk su 直接以 root 执行命令，可读写 /data、其他 App 私有目录；不再使用容器环境",
+                                text = "开启后 AI 通过 root su 直接以 root 执行命令，可读写 /data、其他 App 私有目录；不再使用容器环境",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

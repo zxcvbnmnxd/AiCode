@@ -357,7 +357,7 @@ fun McpServerEditDialog(
                                             style = MaterialTheme.typography.bodyLarge
                                         )
                                         Text(
-                                            text = "通过 Magisk su 启动，访问手机系统目录",
+                                            text = "通过 root su 启动，访问手机系统目录",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )

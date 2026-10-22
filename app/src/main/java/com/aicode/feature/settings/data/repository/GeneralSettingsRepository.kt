@@ -58,6 +58,7 @@ class GeneralSettingsRepository @Inject constructor(
         val SOUND_ON_ERROR_KEY = booleanPreferencesKey("sound_on_error")
         val SOUND_COMPLETE_PATH_KEY = stringPreferencesKey("sound_complete_path")
         val SOUND_ERROR_PATH_KEY = stringPreferencesKey("sound_error_path")
+        val INPUT_CORNER_RADIUS_KEY = intPreferencesKey("input_corner_radius")
 
         /** 首字超时默认 5 分钟，与原硬编码值一致。 */
         const val DEFAULT_FIRST_BYTE_TIMEOUT_SEC = 300
@@ -297,5 +298,13 @@ class GeneralSettingsRepository @Inject constructor(
 
     suspend fun setSoundErrorPath(path: String) {
         context.generalDataStore.edit { it[SOUND_ERROR_PATH_KEY] = path }
+    }
+
+    /** 输入框圆角（dp）；默认 16。 */
+    val inputCornerRadiusFlow: Flow<Int> =
+        context.generalDataStore.data.map { it[INPUT_CORNER_RADIUS_KEY] ?: 16 }
+
+    suspend fun setInputCornerRadius(radius: Int) {
+        context.generalDataStore.edit { it[INPUT_CORNER_RADIUS_KEY] = radius }
     }
 }

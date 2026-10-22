@@ -303,7 +303,7 @@ private fun TabBar(
                         onClick = { showNewMenu = false; onNew() }
                     )
                     DropdownMenuItem(
-                        text = { Text("Root Shell (Magisk su)") },
+                        text = { Text("Root Shell (root su)") },
                         onClick = { showNewMenu = false; onNewRoot() }
                     )
                 }

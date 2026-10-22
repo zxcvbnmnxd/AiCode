@@ -182,7 +182,7 @@ class SystemPromptProvider @Inject constructor(
 
     private inner class EnvironmentSource : PromptSource {
         override fun build(ctx: AgentContext): String = when {
-            containerEngine.rootCommandMode -> "本地 Root 模式（Magisk su，可访问 /data/ 等系统目录）"
+            containerEngine.rootCommandMode -> "本地 Root 模式（root su，可访问 /data/ 等系统目录）"
             executionModeHolder.currentMode() == ExecutionMode.REMOTE_SSH -> "远程 SSH 服务器"
             else -> "本地容器（PRoot）"
         }

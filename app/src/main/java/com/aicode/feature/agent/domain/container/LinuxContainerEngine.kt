@@ -103,7 +103,7 @@ class LinuxContainerEngine @Inject constructor(
     private var currentProfile: ContainerProfile = ContainerProfile.BUILTIN_ALPINE
 
     /**
-     * AI 命令是否以 root 模式执行（通过 Magisk su）。
+     * AI 命令是否以 root 模式执行（通过 root su）。
      * 开启后 [startContainerProcess] 走 `su -c` 而非 proot 容器，AI 可读写 /data、其他 App 私有目录。
      * 默认关闭；开启后容器环境（python/node/git 等）不可用，命令直接在 Android 原生 shell 跑。
      */
@@ -115,12 +115,12 @@ class LinuxContainerEngine @Inject constructor(
         context.getSharedPreferences("aicode_root_prefs", android.content.Context.MODE_PRIVATE)
     }
 
-    /** 切换 AI root 命令模式。开启时自动申请一次 su 触发 Magisk 授权弹窗。 */
+    /** 切换 AI root 命令模式。开启时自动申请一次 su 触发 root 授权弹窗。 */
     fun setRootCommandMode(enabled: Boolean) {
         rootCommandMode = enabled
         prefs.edit().putBoolean("root_command_mode", enabled).apply()
         FileLogger.i(TAG, "AI root 命令模式已${if (enabled) "开启" else "关闭"}")
-        // 开启时自动跑一次 su，触发 Magisk 授权弹窗，用户提前授权
+        // 开启时自动跑一次 su，触发 root 授权弹窗，用户提前授权
         if (enabled) {
             CoroutineScope(Dispatchers.IO).launch {
                 try {
@@ -489,7 +489,7 @@ class LinuxContainerEngine @Inject constructor(
      * 否则回退到 Android 原生 shell（rootfs 缺失时的兜底）。
      */
     private fun startContainerProcess(command: String, projectPath: String?): Process {
-        // root 命令模式：直接走 Magisk su，不进 proot 容器，AI 以真 root 执行命令
+        // root 命令模式：直接走 root su，不进 proot 容器，AI 以真 root 执行命令
         if (rootCommandMode) {
             FileLogger.i(TAG, "AI root 模式：通过 su 执行命令")
             val pb = buildProcessBuilder(buildSuInvocation(command, projectPath))
@@ -761,11 +761,11 @@ class LinuxContainerEngine @Inject constructor(
     }
 
     /**
-     * 构造进入 Android 原生 root shell 的调用（通过 Magisk su）。
+     * 构造进入 Android 原生 root shell 的调用（通过 root su）。
      *
      * 与 [buildProotInvocation] 的区别：不走 PRoot 容器，直接以 root 身份在 Android 系统上跑
      * /system/bin/sh，因此能读写 /data、/data/data/com.termux 等普通 shell 进不去的目录。
-     * su 由 Magisk 通过 PATH 提供，无需指定绝对路径；环境变量继承 App 进程的原生 Android 环境，
+     * su 由 root 通过 PATH 提供，无需指定绝对路径；环境变量继承 App 进程的原生 Android 环境，
      * 不注入容器的 ALPINE 变量。
      */
     fun buildSuInvocation(command: String, projectPath: String? = null): ProotInvocation {

@@ -135,7 +135,7 @@ class TerminalViewModel @Inject constructor(
             try {
                 localManager.createRootTab()
             } catch (e: Exception) {
-                FileLogger.e(TAG, "新建 Root Shell 失败（Magisk 未授权或未安装？）", e)
+                FileLogger.e(TAG, "新建 Root Shell 失败（root 未授权或未安装？）", e)
             } finally {
                 _creatingTab.value = false
             }

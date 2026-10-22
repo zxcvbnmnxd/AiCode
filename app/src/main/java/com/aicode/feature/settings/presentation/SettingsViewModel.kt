@@ -453,7 +453,7 @@ class SettingsViewModel @Inject constructor(
     private val _proxyTestState = MutableStateFlow<ProxyTestUiState>(ProxyTestUiState.Idle)
     val proxyTestState: StateFlow<ProxyTestUiState> = _proxyTestState.asStateFlow()
 
-    /** AI 命令是否以 root（Magisk su）模式执行。 */
+    /** AI 命令是否以 root（root su）模式执行。 */
     private val _rootCommandMode = MutableStateFlow(containerEngine.rootCommandMode)
     val rootCommandMode: StateFlow<Boolean> = _rootCommandMode.asStateFlow()
 
@@ -608,6 +608,8 @@ class SettingsViewModel @Inject constructor(
     val soundCompletePath: StateFlow<String> = _soundCompletePath.asStateFlow()
     private val _soundErrorPath = MutableStateFlow("")
     val soundErrorPath: StateFlow<String> = _soundErrorPath.asStateFlow()
+    private val _inputCornerRadius = MutableStateFlow(16)
+    val inputCornerRadius: StateFlow<Int> = _inputCornerRadius.asStateFlow()
 
     private val _themeMode = MutableStateFlow(AppThemeMode.AUTO)
     val themeMode: StateFlow<AppThemeMode> = _themeMode.asStateFlow()
@@ -1041,6 +1043,11 @@ class SettingsViewModel @Inject constructor(
             launch {
                 generalSettingsRepository.soundErrorPathFlow.collectLatest {
                     _soundErrorPath.value = it
+                }
+            }
+            launch {
+                generalSettingsRepository.inputCornerRadiusFlow.collectLatest {
+                    _inputCornerRadius.value = it
                 }
             }
 
@@ -2108,6 +2115,12 @@ class SettingsViewModel @Inject constructor(
     fun setSoundErrorPath(path: String) {
         viewModelScope.launch {
             generalSettingsRepository.setSoundErrorPath(path)
+        }
+    }
+
+    fun setInputCornerRadius(radius: Int) {
+        viewModelScope.launch {
+            generalSettingsRepository.setInputCornerRadius(radius)
         }
     }
 

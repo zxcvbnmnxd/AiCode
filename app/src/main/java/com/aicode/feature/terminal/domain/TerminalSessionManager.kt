@@ -105,12 +105,12 @@ class TerminalSessionManager @Inject constructor(
     suspend fun createInteractiveTab(): String = createTab()
 
     /**
-     * 新建一个 Root Shell 标签：通过 Magisk su 直接进入 Android 原生 root shell，
+     * 新建一个 Root Shell 标签：通过 root su 直接进入 Android 原生 root shell，
      * 不经过 PRoot 容器，可读写 /data、/data/data/com.termux 等系统目录。
      */
     suspend fun createRootTab(): String {
         val id = nextId()
-        // root shell 不需要容器，跳过 ensureContainer；失败（如未装 Magisk/su 未授权）直接抛
+        // root shell 不需要容器，跳过 ensureContainer；失败（如未装 root/su 未授权）直接抛
         val shellCommand = buildRootInteractiveCommand()
         FileLogger.i(TAG, "Root shell 命令（$id）：$shellCommand")
         val (session, client) = try {

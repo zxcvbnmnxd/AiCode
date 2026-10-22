@@ -73,7 +73,9 @@ internal fun GeneralSettingsSection(
     soundCompletePath: String,
     onSetSoundCompletePath: (String) -> Unit,
     soundErrorPath: String,
-    onSetSoundErrorPath: (String) -> Unit
+    onSetSoundErrorPath: (String) -> Unit,
+    inputCornerRadius: Int,
+    onSetInputCornerRadius: (Int) -> Unit
 ) {
     var showStartupSessionSheet by remember { mutableStateOf(false) }
     var editingFirstByteTimeout by remember { mutableStateOf(false) }
@@ -85,6 +87,7 @@ internal fun GeneralSettingsSection(
     var editingGoalMaxTokens by remember { mutableStateOf(false) }
     var editingCompletePath by remember { mutableStateOf(false) }
     var editingErrorPath by remember { mutableStateOf(false) }
+    var editingInputCornerRadius by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -299,6 +302,23 @@ internal fun GeneralSettingsSection(
                 )
             }
         }
+
+        SettingsGroupHeader(text = "外观")
+        SettingsGroup {
+            SettingsRow(
+                icon = null,
+                title = "输入框圆角",
+                subtitle = "聊天输入框的圆角大小（dp）",
+                onClick = { editingInputCornerRadius = true },
+                trailing = {
+                    Text(
+                        text = "$inputCornerRadius dp",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.semanticColors.subtleText
+                    )
+                }
+            )
+        }
     }
 
     if (showStartupSessionSheet) {
@@ -431,6 +451,21 @@ internal fun GeneralSettingsSection(
                 editingErrorPath = false
             },
             onDismiss = { editingErrorPath = false }
+        )
+    }
+
+    if (editingInputCornerRadius) {
+        NumberInputDialog(
+            title = "输入框圆角",
+            initialValue = inputCornerRadius,
+            hint = "范围 0-32 dp，0 为直角",
+            minValue = 0,
+            maxValue = 32,
+            onConfirm = {
+                onSetInputCornerRadius(it)
+                editingInputCornerRadius = false
+            },
+            onDismiss = { editingInputCornerRadius = false }
         )
     }
 }
