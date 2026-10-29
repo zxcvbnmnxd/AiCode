@@ -2,6 +2,7 @@ package com.aicode.feature.git.domain
 
 import com.aicode.core.util.FileLogger
 import com.aicode.feature.agent.domain.container.CommandEngine
+import com.aicode.feature.agent.domain.container.LinuxContainerEngine
 import com.aicode.feature.git.domain.model.GitBranch
 import com.aicode.feature.git.domain.model.GitCommit
 import com.aicode.feature.git.domain.model.GitFileChange
@@ -34,6 +35,7 @@ private const val TAG = "GitRepository"
 @Singleton
 class GitRepository @Inject constructor(
     private val engine: CommandEngine,
+    private val containerEngine: LinuxContainerEngine,
     private val workspaceRepository: WorkspaceRepository
 ) {
     /** 当前选中的 git 仓库路径；null 表示未指定（用工作区根）。 */
@@ -69,16 +71,20 @@ class GitRepository @Inject constructor(
 
     /**
      * 发现工作区里的 git 仓库：工作区根 + 一层直接子目录。
-     * 本地模式用 File 列子目录；远程模式下 File 操作无效（路径是远程的），runCatching 捕获后
-     * 自动退化为只检查工作区根。返回按「根优先、子目录按名称排序」的路径列表。
+     * 容器/远程模式用 File 列子目录；root 模式 App 进程无权列 `/data` 工作区，改由 root shell
+     * `find` 列出一层子目录。返回按「根优先、子目录按名称排序」的路径列表。
      */
     suspend fun discoverRepos(): List<String> {
         val root = workspaceRepository.currentPath()
         val candidates = mutableListOf(root)
-        runCatching {
-            java.io.File(root).listFiles { f -> f.isDirectory }
-                ?.sortedBy { it.name }
-                ?.forEach { candidates.add(it.absolutePath) }
+        if (containerEngine.rootCommandMode) {
+            candidates += shellListDirs(root)
+        } else {
+            runCatching {
+                java.io.File(root).listFiles { f -> f.isDirectory }
+                    ?.sortedBy { it.name }
+                    ?.forEach { candidates.add(it.absolutePath) }
+            }
         }
         return candidates.filter { isGitRepo(it) }
     }
@@ -92,16 +98,31 @@ class GitRepository @Inject constructor(
 
     /**
      * 列出工作区根的一层直接子目录（供仓库选择弹窗展示扫描范围）。
-     * 本地模式用 File 列；远程模式下 File 操作无效（路径是远程的），runCatching 捕获后返回空。
+     * 本地模式用 File 列；root 模式走 root shell `find`；远程模式 File 操作无效，runCatching 返回空。
      */
-    fun listSubdirectories(): List<String> {
+    suspend fun listSubdirectories(): List<String> {
         val root = workspaceRepository.currentPath()
+        if (containerEngine.rootCommandMode) return shellListDirs(root)
         return runCatching {
             java.io.File(root).listFiles { f -> f.isDirectory }
                 ?.sortedBy { it.name }
                 ?.map { it.absolutePath }
                 .orEmpty()
         }.getOrDefault(emptyList())
+    }
+
+    /** root 模式经 shell 列出 [root] 下一层子目录（绝对路径，按名称排序）。 */
+    private suspend fun shellListDirs(root: String): List<String> {
+        val result = engine.runCommandSyncUnbounded(
+            "find ${shellQuote(root)} -maxdepth 1 -mindepth 1 -type d",
+            root
+        )
+        if (result.exitCode != 0) return emptyList()
+        return result.output.lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .sorted()
+            .toList()
     }
 
     /** 当前工作区根路径（git 命令的默认执行目录）。 */

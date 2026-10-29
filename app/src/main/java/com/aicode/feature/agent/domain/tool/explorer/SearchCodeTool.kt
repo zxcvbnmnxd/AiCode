@@ -2,6 +2,7 @@ package com.aicode.feature.agent.domain.tool.explorer
 
 import com.aicode.core.util.FileLogger
 import com.aicode.feature.agent.domain.container.CommandEngine
+import com.aicode.feature.agent.domain.container.LinuxContainerEngine
 import com.aicode.feature.agent.domain.tool.AgentTool
 import com.aicode.feature.agent.domain.tool.ParameterType
 import com.aicode.feature.agent.domain.tool.ToolCapability
@@ -24,6 +25,7 @@ import javax.inject.Inject
  */
 class SearchCodeTool @Inject constructor(
     private val commandEngine: CommandEngine,
+    private val containerEngine: LinuxContainerEngine,
     private val workspaceRepository: WorkspaceRepository,
     private val pathHomeResolver: PathHomeResolver
 ) : AgentTool() {
@@ -64,11 +66,19 @@ class SearchCodeTool @Inject constructor(
                 command = command,
                 projectPath = workspaceRepository.currentPath(),
                 timeoutMs = SEARCH_TIMEOUT_MS
-            ) ?: return ToolResult.Error("容器未就绪，无法执行 rg", "CONTAINER_NOT_READY")
+            ) ?: return ToolResult.Error(
+                if (containerEngine.rootCommandMode) "root shell 未就绪，无法执行 rg" else "容器未就绪，无法执行 rg",
+                "NOT_READY"
+            )
 
             // 127 = shell 找不到命令；合并 stderr 后通常也能看到 command not found，双保险
             if (isRgMissing(result.output) || result.exitCode == 127) {
-                return ToolResult.Error("容器内未安装 rg", "RG_MISSING")
+                val hint = if (containerEngine.rootCommandMode) {
+                    "root 环境未安装 ripgrep：请在 Termux 执行 `pkg install ripgrep`（安装后 PATH 会自动包含），或改用 Bash grep 搜索"
+                } else {
+                    "容器内未安装 rg"
+                }
+                return ToolResult.Error(hint, "RG_MISSING")
             }
             if (result.exitCode != null && result.exitCode > 1) {
                 return ToolResult.Error(result.output.ifBlank { "rg 执行失败" }, "RG_ERROR")

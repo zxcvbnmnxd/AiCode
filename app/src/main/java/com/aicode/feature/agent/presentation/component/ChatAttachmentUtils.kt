@@ -171,11 +171,19 @@ internal suspend fun copyUriToWorkspace(
     context: Context,
     uri: Uri,
     fileAccess: FileAccessProvider,
-    includeImageData: Boolean = false
+    includeImageData: Boolean = false,
+    rootMode: Boolean = false
 ): UploadedWorkspaceFile = withContext(Dispatchers.IO) {
-    val attachmentsDir = "${WorkspacePathMapper.CONTAINER_ROOT}/.aicode/attachments"
+    // 附件统一落到 AI 配置目录（容器路径 /root/.aicode/attachments → 宿主 filesDir/aicode/attachments），
+    // 不写进用户项目工作区；该目录属 App 私有，App 进程可读写，root 模式下也不会因 /data 工作区权限失败。
+    val attachmentsDir = "${WorkspacePathMapper.AICODE_ROOT}/attachments"
     val fileName = uniqueUploadName(fileAccess, attachmentsDir, safeUploadFileName(context, uri))
+    // 落盘交给 fileAccess，容器路径由 mapper 映射到宿主配置目录。
     val containerPath = "$attachmentsDir/$fileName"
+    // root 模式给 AI 的路径用宿主真实绝对路径（root shell 直接 cat）；容器模式用容器路径。
+    val hostDir = java.io.File(context.filesDir, "aicode/attachments")
+    val hostPath = java.io.File(hostDir, fileName).absolutePath
+    val aiVisiblePath = if (rootMode) hostPath else containerPath
 
     val mimeType = if (includeImageData) {
         imageMimeType(context, uri, fileName)
@@ -200,7 +208,7 @@ internal suspend fun copyUriToWorkspace(
         image = AgentImage(
             mimeType = mimeType,
             base64Data = Base64.getEncoder().encodeToString(bytes),
-            path = containerPath
+            path = aiVisiblePath
         )
     } else {
         // 普通附件流式落盘：不再整份读进内存，于是文件多大都不会顶爆堆
@@ -215,7 +223,7 @@ internal suspend fun copyUriToWorkspace(
 
     UploadedWorkspaceFile(
         fileName = fileName,
-        containerPath = containerPath,
+        containerPath = aiVisiblePath,
         localPath = localFile.absolutePath,
         mimeType = mimeType,
         sizeBytes = sizeBytes,

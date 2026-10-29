@@ -2,6 +2,7 @@ package com.aicode.feature.workspace.domain
 
 import com.aicode.feature.agent.domain.container.ContainerInstaller
 import com.aicode.feature.agent.domain.container.ContainerProfile
+import com.aicode.feature.agent.domain.container.LinuxContainerEngine
 import com.aicode.feature.settings.data.repository.ContainerSettingsRepository
 import com.aicode.feature.workspace.data.repository.WorkspaceRepository
 import kotlinx.coroutines.CoroutineScope
@@ -34,7 +35,8 @@ class WorkspacePathMapper @Inject constructor(
     private val workspaceRepository: WorkspaceRepository,
     private val containerInstaller: ContainerInstaller,
     private val containerSettingsRepository: ContainerSettingsRepository,
-    private val pathHomeResolver: PathHomeResolver
+    private val pathHomeResolver: PathHomeResolver,
+    private val containerEngine: LinuxContainerEngine
 ) {
     companion object {
         /** AI 看到的工作区根路径。用 `~` 形式让提示词/工具描述更自然，内部用 [resolvedContainerRoot] 展开后匹配。 */
@@ -98,7 +100,11 @@ class WorkspacePathMapper @Inject constructor(
             p == AICODE_ROOT || p == "$AICODE_ROOT/" -> aicodeRoot()
             p.startsWith("$AICODE_ROOT/") -> File(aicodeRoot(), p.removePrefix("$AICODE_ROOT/"))
             else -> mountedHostFile(p)
-                ?: if (p.startsWith("/")) File(rootfsRoot(), p.removePrefix("/")) else File(root, p)
+                ?: if (containerEngine.rootCommandMode) {
+                    // root 模式没有容器 rootfs：未命中工作区/配置目录的绝对路径即手机宿主真实路径，
+                    // 直接按原路径返回，不能错误映射进本地 rootfs 副本。
+                    if (p.startsWith("/")) File(p) else File(root, p)
+                } else if (p.startsWith("/")) File(rootfsRoot(), p.removePrefix("/")) else File(root, p)
         }
         return file
     }

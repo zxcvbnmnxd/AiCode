@@ -372,7 +372,9 @@ class LinuxContainerEngine @Inject constructor(
         projectPath: String?,
         timeoutMs: Long
     ): CommandResult? {
-        if (!containerInstaller.isInstalledFor(currentProfile)) return null
+        // root 模式不依赖 rootfs/proot，无需先判断容器是否安装，直接尝试 su 执行；
+        // 缺命令（rg/git 等）由调用方据退出码/输出给出明确错误。
+        if (!rootCommandMode && !containerInstaller.isInstalledFor(currentProfile)) return null
         val result = execCaptured(command, projectPath, timeoutMs)
         return CommandResult(result.output, result.exitCode, result.truncated)
     }
@@ -550,11 +552,16 @@ class LinuxContainerEngine @Inject constructor(
     /**
      * 容器未就绪（rootfs 未解压）时返回引导文案，就绪返回 null。
      * 命令执行入口据此不自动初始化、直接失败并引导用户去终端页完成初始化。
+     * root 模式不依赖 rootfs/proot，直接放行。
      */
-    override fun notReadyHint(): String? = notReadyHintFor(currentProfile)
+    override fun notReadyHint(): String? {
+        if (rootCommandMode) return null
+        return notReadyHintFor(currentProfile)
+    }
 
     /** 按指定 profile 判断容器是否就绪（MCP 按运行时容器启动前检查用）。 */
     fun notReadyHintFor(profile: ContainerProfile): String? {
+        if (rootCommandMode) return null
         if (containerInstaller.isInstalledFor(profile)) return null
         return context.getString(R.string.container_not_ready_hint)
     }
@@ -786,17 +793,41 @@ class LinuxContainerEngine @Inject constructor(
      * su 由 root 通过 PATH 提供，无需指定绝对路径；环境变量继承 App 进程的原生 Android 环境，
      * 不注入容器的 ALPINE 变量。
      */
+    /**
+     * 构造进入 Android 原生 root shell 的调用（通过 root su）。
+     *
+     * 与 [buildProotInvocation] 的区别：不走 PRoot 容器，直接以 root 身份在 Android 系统上跑
+     * /system/bin/sh，因此能读写 /data、/data/data/com.termux 等普通 shell 进不去的目录。
+     *
+     * root 环境补齐：HOME / 配置目录 / TMPDIR / LANG / TZ / git 全局配置与 safe.directory；
+     * 并探测已安装的 Termux 根文件系统，把其 `usr/bin`、`usr/lib` 叠加进 PATH 与
+     * LD_LIBRARY_PATH，使 root shell 可直接调用 Termux 内安装的 git / rg / python / node 等。
+     * Termux 未安装时不叠加，命令仍走系统 toybox。
+     */
     fun buildSuInvocation(command: String, projectPath: String? = null): ProotInvocation {
-        // root 模式：su 上下文的 HOME 不是容器里的 /root，~/.aicode 会指向错误位置。
-        // 这里显式 export HOME 到 App filesDir，并暴露配置目录绝对路径 AICODE_CONFIG_DIR，
-        // 保证 AI 在 root shell 里访问配置目录、家目录时路径一致（命令行 export 不依赖 su 是否保留环境变量）。
         val filesDir = context.filesDir.absolutePath
         val configDir = containerInstaller.aicodeDir.absolutePath
+        val tmpDir = java.io.File(context.filesDir, "tmp").apply { mkdirs() }.absolutePath
+        val tz = java.util.TimeZone.getDefault().id
+
         val prefix = buildString {
-            append("export HOME='$filesDir'")
-            append(" && export AICODE_CONFIG_DIR='$configDir'")
+            append("export HOME=${shQuote(filesDir)}")
+            append(" && export AICODE_CONFIG_DIR=${shQuote(configDir)}")
+            append(" && export TMPDIR=${shQuote(tmpDir)}")
+            append(" && export TERM='xterm-256color'")
+            append(" && export LANG='C.UTF-8'")
+            append(" && export TZ=${shQuote(tz)}")
+            append(" && export GIT_CONFIG_GLOBAL=${shQuote("$configDir/.gitconfig")}")
+            append(" && export GIT_CONFIG_COUNT=1")
+            append(" && export GIT_CONFIG_KEY_0='safe.directory'")
+            append(" && export GIT_CONFIG_VALUE_0='*'")
+            // 探测 Termux 根文件系统（标准包名 + 常见变体），存在才叠加其 PATH / 动态库目录。
+            append(" && for __t in /data/data/com.termux/files /data/user/0/com.termux/files /data/data/com.termux.tudo/files; do ")
+            append("if [ -d \"\$__t/usr/bin\" ]; then ")
+            append("export PATH=\"\$__t/usr/bin:\$__t/usr/local/bin:\$PATH\"; ")
+            append("export LD_LIBRARY_PATH=\"\$__t/usr/lib:\${LD_LIBRARY_PATH:-}\"; break; fi; done")
             if (projectPath != null && projectPath.startsWith("/")) {
-                append(" && cd '$projectPath'")
+                append(" && cd ${shQuote(projectPath)}")
             }
         }
         val fullCommand = "$prefix && $command"
@@ -804,8 +835,19 @@ class LinuxContainerEngine @Inject constructor(
         val env = System.getenv()?.toMap()?.toMutableMap() ?: mutableMapOf()
         env["HOME"] = filesDir
         env["AICODE_CONFIG_DIR"] = configDir
+        env["TMPDIR"] = tmpDir
+        env["TERM"] = "xterm-256color"
+        env["LANG"] = "C.UTF-8"
+        env["TZ"] = tz
+        env["GIT_CONFIG_GLOBAL"] = "$configDir/.gitconfig"
+        env["GIT_CONFIG_COUNT"] = "1"
+        env["GIT_CONFIG_KEY_0"] = "safe.directory"
+        env["GIT_CONFIG_VALUE_0"] = "*"
         return ProotInvocation(argv, env)
     }
+
+    /** 把文件路径安全包进单引号（供 `su -c` 命令串使用）；单引号按 `'\''` 转义。 */
+    private fun shQuote(raw: String): String = "'" + raw.replace("'", "'\\''") + "'"
 
     /**
      * 构造 PRoot 调用的公共前缀 argv：proot 二进制 + rootfs + 标准绑定 + 伪 root + 工作区绑定，

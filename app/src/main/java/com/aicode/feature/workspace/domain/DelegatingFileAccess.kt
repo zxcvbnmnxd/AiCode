@@ -1,5 +1,6 @@
 package com.aicode.feature.workspace.domain
 
+import com.aicode.feature.agent.domain.container.LinuxContainerEngine
 import com.aicode.feature.settings.data.repository.ExecutionMode
 import com.aicode.feature.settings.data.repository.ExecutionModeHolder
 import java.io.File
@@ -9,8 +10,12 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * [FileAccessProvider] 的委托层：同时持有本地与远程两套实现，每次方法调用时按
- * [ExecutionModeHolder.currentMode] 转发到对应实现。
+ * [FileAccessProvider] 的委托层：同时持有本地、远程与 root shell 三套实现，每次方法调用时按
+ * 当前执行模式与 AI root 命令模式转发到对应实现。
+ *
+ * - 远程 SSH → [RemoteSftpFileAccess]；
+ * - AI root 命令模式 → [RootShellFileAccess]（经 su 操作宿主 /data 等目录）；
+ * - 其余本地容器模式 → [LocalFileAccess]。
  *
  * 这样 Hilt 注入时机不再影响最终行为——无论 [FileAccessProvider] 在何时被首次注入，
  * 真正读写文件时才读取当前模式。
@@ -19,12 +24,17 @@ import javax.inject.Singleton
 class DelegatingFileAccess @Inject constructor(
     private val modeHolder: ExecutionModeHolder,
     private val localFileAccess: LocalFileAccess,
-    private val remoteSftpFileAccess: RemoteSftpFileAccess
+    private val remoteSftpFileAccess: RemoteSftpFileAccess,
+    private val rootShellFileAccess: RootShellFileAccess,
+    private val containerEngine: LinuxContainerEngine
 ) : FileAccessProvider {
 
     private fun delegate(): FileAccessProvider =
-        if (modeHolder.currentMode() == ExecutionMode.REMOTE_SSH) remoteSftpFileAccess
-        else localFileAccess
+        when {
+            modeHolder.currentMode() == ExecutionMode.REMOTE_SSH -> remoteSftpFileAccess
+            containerEngine.rootCommandMode -> rootShellFileAccess
+            else -> localFileAccess
+        }
 
     override fun readFile(path: String): String = delegate().readFile(path)
 

@@ -22,7 +22,7 @@
 
 ## 工具
 - `readFile` 读文件；`writeFile` 新建或整文件重写；`editFile` 局部修改首选；`list` 列目录；`search` 搜内容（只读）；`viewImage` 看图片。
-- `Bash` 执行一次性命令（内置 `git`、`rg`、`py`/`python`、`node`）。
+- `Bash` 执行一次性命令：容器模式内置 `git`、`rg`、`py`/`python`、`node`；root 模式下 Termux 已装的同名命令可直接调用，未安装则不存在，不要假设可用。
 - `terminal` 管理常驻或交互式会话：会自行结束且需等结果的用 `notify=true`（命令结束后系统主动唤醒 AI 并推回退出码与末尾输出，不要轮询或 sleep 等待）；启动新会话前先 `read` 复用已有标签。
 - `todo` 维护任务清单；`memory` 读写长期记忆；`loadSkill` 加载技能正文；`websearch`/`webfetch` 查实时信息与抓网页；`askUserQuestion` 需用户决策时用；`sendFile` 展示文件。
 

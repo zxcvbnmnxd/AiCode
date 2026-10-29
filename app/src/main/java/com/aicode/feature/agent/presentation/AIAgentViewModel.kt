@@ -353,6 +353,9 @@ class AIAgentViewModel @Inject constructor(
     /** 容器初始化实时进度（解压/部署/装包），AI 页底部气泡展示。 */
     val containerInit: StateFlow<ContainerInitState> = containerEngine.initProgress
 
+    /** 当前是否为 AI root 命令模式（供附件落盘路径选择等 UI/工具判断）。 */
+    val isRootMode: Boolean get() = containerEngine.rootCommandMode
+
     private val _currentWorkspace = MutableStateFlow<String>("")
     fun setWorkspace(path: String) {
         if (path.isBlank() || _currentWorkspace.value == path) return

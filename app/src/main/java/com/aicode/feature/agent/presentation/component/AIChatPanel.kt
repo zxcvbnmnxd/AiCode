@@ -973,7 +973,7 @@ fun AIChatPanel(
             try {
                 selected.forEach { uri ->
                     runCatching {
-                        copyUriToWorkspace(context, uri, viewModel.fileAccess, includeImageData = images)
+                        copyUriToWorkspace(context, uri, viewModel.fileAccess, includeImageData = images, rootMode = viewModel.isRootMode)
                     }.onSuccess { uploaded ->
                         pendingAttachments = pendingAttachments + uploaded.toPendingAttachment()
                         successCount += 1
