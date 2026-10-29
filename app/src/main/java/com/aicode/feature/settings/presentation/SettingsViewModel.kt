@@ -599,10 +599,10 @@ class SettingsViewModel @Inject constructor(
     private val _deleteExternalWorkspaceSessions = MutableStateFlow(false)
     val deleteExternalWorkspaceSessions: StateFlow<Boolean> = _deleteExternalWorkspaceSessions.asStateFlow()
 
-    // 提示音设置
-    private val _soundOnComplete = MutableStateFlow(false)
+    // 提示音设置（默认开启）
+    private val _soundOnComplete = MutableStateFlow(true)
     val soundOnComplete: StateFlow<Boolean> = _soundOnComplete.asStateFlow()
-    private val _soundOnError = MutableStateFlow(false)
+    private val _soundOnError = MutableStateFlow(true)
     val soundOnError: StateFlow<Boolean> = _soundOnError.asStateFlow()
     private val _soundCompletePath = MutableStateFlow("")
     val soundCompletePath: StateFlow<String> = _soundCompletePath.asStateFlow()

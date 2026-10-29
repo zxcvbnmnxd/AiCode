@@ -140,10 +140,28 @@ class LinuxContainerEngine @Inject constructor(
     init {
         // 启动时从本地读取 root 模式开关，重启不丢失
         rootCommandMode = prefs.getBoolean("root_command_mode", false)
+        ensureRootHomeSymlink()
         CoroutineScope(Dispatchers.IO).launch {
             containerSettingsRepository.activeProfileIdFlow.collect { id ->
                 currentProfile = resolveProfile(id)
             }
+        }
+    }
+
+    /**
+     * root 模式下 HOME 指向 App filesDir；为让 `~/.aicode` 也能命中配置目录，
+     * 在 filesDir 下建 `.aicode` → `aicode` 的符号链接（容器模式不受影响，容器内走 proot 绑定）。
+     */
+    private fun ensureRootHomeSymlink() {
+        try {
+            val home = context.filesDir
+            val link = java.io.File(home, ".aicode")
+            val target = containerInstaller.aicodeDir.absolutePath
+            if (!link.exists()) {
+                Runtime.getRuntime().exec(arrayOf("ln", "-sf", target, link.absolutePath))
+            }
+        } catch (e: Exception) {
+            FileLogger.w(TAG, "创建 ~/.aicode 软链失败: ${e.message}")
         }
     }
 
@@ -769,14 +787,23 @@ class LinuxContainerEngine @Inject constructor(
      * 不注入容器的 ALPINE 变量。
      */
     fun buildSuInvocation(command: String, projectPath: String? = null): ProotInvocation {
-        // root 模式下，先 cd 到工作区路径，让 AI 在正确目录下执行命令
-        val fullCommand = if (projectPath != null && projectPath.startsWith("/")) {
-            "cd '$projectPath' && $command"
-        } else {
-            command
+        // root 模式：su 上下文的 HOME 不是容器里的 /root，~/.aicode 会指向错误位置。
+        // 这里显式 export HOME 到 App filesDir，并暴露配置目录绝对路径 AICODE_CONFIG_DIR，
+        // 保证 AI 在 root shell 里访问配置目录、家目录时路径一致（命令行 export 不依赖 su 是否保留环境变量）。
+        val filesDir = context.filesDir.absolutePath
+        val configDir = containerInstaller.aicodeDir.absolutePath
+        val prefix = buildString {
+            append("export HOME='$filesDir'")
+            append(" && export AICODE_CONFIG_DIR='$configDir'")
+            if (projectPath != null && projectPath.startsWith("/")) {
+                append(" && cd '$projectPath'")
+            }
         }
+        val fullCommand = "$prefix && $command"
         val argv = listOf("su", "-c", fullCommand)
         val env = System.getenv()?.toMap()?.toMutableMap() ?: mutableMapOf()
+        env["HOME"] = filesDir
+        env["AICODE_CONFIG_DIR"] = configDir
         return ProotInvocation(argv, env)
     }
 

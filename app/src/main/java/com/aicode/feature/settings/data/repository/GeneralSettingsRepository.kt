@@ -274,15 +274,15 @@ class GeneralSettingsRepository @Inject constructor(
 
     /** AI 正常完成任务时播放提示音；默认关闭。 */
     val soundOnCompleteFlow: Flow<Boolean> =
-        context.generalDataStore.data.map { it[SOUND_ON_COMPLETE_KEY] ?: false }
+        context.generalDataStore.data.map { it[SOUND_ON_COMPLETE_KEY] ?: true }
 
     suspend fun setSoundOnComplete(enabled: Boolean) {
         context.generalDataStore.edit { it[SOUND_ON_COMPLETE_KEY] = enabled }
     }
 
-    /** AI 出错时播放提示音；默认关闭。 */
+    /** AI 出错时播放提示音；默认开启。 */
     val soundOnErrorFlow: Flow<Boolean> =
-        context.generalDataStore.data.map { it[SOUND_ON_ERROR_KEY] ?: false }
+        context.generalDataStore.data.map { it[SOUND_ON_ERROR_KEY] ?: true }
 
     suspend fun setSoundOnError(enabled: Boolean) {
         context.generalDataStore.edit { it[SOUND_ON_ERROR_KEY] = enabled }

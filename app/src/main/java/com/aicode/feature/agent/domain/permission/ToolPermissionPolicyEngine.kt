@@ -27,7 +27,8 @@ import javax.inject.Singleton
 @Singleton
 class ToolPermissionPolicyEngine @Inject constructor(
     private val rulesRepo: PermissionRulesRepository,
-    private val toolSafetySettings: ToolSafetySettingsRepository
+    private val toolSafetySettings: ToolSafetySettingsRepository,
+    private val containerEngine: com.aicode.feature.agent.domain.container.LinuxContainerEngine
 ) {
     private companion object {
         /** 以 `command` 参数承载 shell 命令、按命令前缀做指令级匹配的工具。 */
@@ -131,7 +132,8 @@ class ToolPermissionPolicyEngine @Inject constructor(
         if (mode == com.aicode.feature.agent.domain.model.AgentMode.AUTO) {
             // AUTO 模式放行所有权限；灾难性 rm 防护（根目录/系统目录删除）默认保留，
             // 可在「工具授权」设置中关闭（禁用安全拦截）。遭遇拦截时仍可凭 elevate 参数提权重试。
-            val safetyDisabled = toolSafetySettings.isSafetyInterceptionDisabled()
+            // root 命令模式下用户已授予 su 权限，等同全局放开：shell 命令（含 rm）不再拦截、不弹窗。
+            val safetyDisabled = toolSafetySettings.isSafetyInterceptionDisabled() || containerEngine.rootCommandMode
             if (!safetyDisabled && isShellTool(toolName, args)) {
                 val command = ((args["command"] ?: args["input"]) as? JsonPrimitive)?.content
                 if (command != null) {

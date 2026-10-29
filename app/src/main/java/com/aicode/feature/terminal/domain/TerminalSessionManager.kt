@@ -216,19 +216,30 @@ class TerminalSessionManager @Inject constructor(
         notify: Boolean,
         sourceSessionId: String?
     ): String {
-        ensureContainer()
+        // root 命令模式：AI 后台终端直接用原生 root su shell，不启动 PRoot 容器，
+        // 可读写 /data 等系统目录；HOME/配置目录/工作区 cd 由 buildSuInvocation 统一处理。
+        val rootMode = containerEngine.rootCommandMode
+        if (!rootMode) ensureContainer()
         val id = nextId()
         // 用 `ec=$?` 捕获命令真实退出码后再 echo，否则 echo 本身恒为 0 会覆盖进程退出码，导致
         // onFinished 回调里的 exitStatus 永远是 0、与屏幕上 echo 出来的码对不上。
-        // notify=true：echo 后 `exit $ec` 让 shell 以命令真实退出码结束 → proot 透传 → 回调 exitStatus
+        // notify=true：echo 后 `exit $ec` 让 shell 以命令真实退出码结束 → proot/su 透传 → 回调 exitStatus
         //   正确，且 shell 自然退出稳定触发 MSG_PROCESS_EXITED；否则脚本末尾是 echo，进程退出码被
         //   污染成 0，而某些情况下进程不干净退出还会导致回调不触发。
         // notify=false：echo 后 `exec ${shell}` 保活，标签可复用（dev server 退出后也能继续输入）；
         //   此时进程不退出、不回调，退出码无意义，符合 dev server 场景设计。
-        val afterCommand = if (notify) "; exit \$ec" else "; exec ${containerEngine.defaultShell()}"
-        val shellCommand = "cd ~/workspace 2>/dev/null; export ENV=/etc/profile; " +
+        val afterCommand = if (notify) {
+            "; exit \$ec"
+        } else {
+            "; exec ${if (rootMode) "/system/bin/sh" else containerEngine.defaultShell()}"
+        }
+        val shellCommand = if (rootMode) {
             "$command; ec=\$?; echo \"[command exited: \$ec]\"$afterCommand"
-        val (session, client) = buildSession(shellCommand)
+        } else {
+            "cd ~/workspace 2>/dev/null; export ENV=/etc/profile; " +
+                "$command; ec=\$?; echo \"[command exited: \$ec]\"$afterCommand"
+        }
+        val (session, client) = buildSession(shellCommand, useRoot = rootMode)
         addTab(
             TerminalTab(
                 id = id,
@@ -441,7 +452,7 @@ class TerminalSessionManager @Inject constructor(
     private fun buildSession(shellCommand: String, useRoot: Boolean = false): Pair<TerminalSession, AppTerminalSessionClient> {
         val workspace = workspaceRepository.currentPath()
         val invocation = if (useRoot) {
-            containerEngine.buildSuInvocation(shellCommand)
+            containerEngine.buildSuInvocation(shellCommand, workspace)
         } else {
             containerEngine.buildProotInvocation(shellCommand, workspace)
         }

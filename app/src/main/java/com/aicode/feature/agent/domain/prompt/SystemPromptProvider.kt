@@ -176,8 +176,12 @@ class SystemPromptProvider @Inject constructor(
     }
 
     private inner class WorkspaceSource : PromptSource {
-        override fun build(ctx: AgentContext): String =
-            if (ctx.projectRoot.isNotBlank()) "~/workspace" else "（未选择工作区）"
+        override fun build(ctx: AgentContext): String = when {
+            ctx.projectRoot.isBlank() -> "（未选择工作区）"
+            // root 模式：工作区是手机上的真实绝对路径，直接展示给 AI，不再使用容器内的 ~/workspace。
+            containerEngine.rootCommandMode -> ctx.projectRoot
+            else -> "~/workspace"
+        }
     }
 
     private inner class EnvironmentSource : PromptSource {
