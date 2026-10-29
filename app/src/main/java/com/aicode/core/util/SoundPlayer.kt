@@ -26,8 +26,12 @@ object SoundPlayer {
                         }
                     }
                     else -> {
-                        // 默认从 assets 读取（soundPath 传 "complete" 或 "error"）
-                        val assetName = if (soundPath == "error") "sounds/error.wav" else "sounds/complete.wav"
+                        // 默认从 assets 读取（soundPath 传 "complete" / "error" / "notify"）
+                        val assetName = when (soundPath) {
+                            "error" -> "sounds/error.wav"
+                            "notify" -> "sounds/notify.wav"
+                            else -> "sounds/complete.wav"
+                        }
                         val afd = context.assets.openFd(assetName)
                         MediaPlayer().apply {
                             setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)

@@ -74,6 +74,10 @@ internal fun GeneralSettingsSection(
     onSetSoundCompletePath: (String) -> Unit,
     soundErrorPath: String,
     onSetSoundErrorPath: (String) -> Unit,
+    soundOnNotify: Boolean,
+    onToggleSoundOnNotify: (Boolean) -> Unit,
+    soundNotifyPath: String,
+    onSetSoundNotifyPath: (String) -> Unit,
     inputCornerRadius: Int,
     onSetInputCornerRadius: (Int) -> Unit
 ) {
@@ -87,6 +91,7 @@ internal fun GeneralSettingsSection(
     var editingGoalMaxTokens by remember { mutableStateOf(false) }
     var editingCompletePath by remember { mutableStateOf(false) }
     var editingErrorPath by remember { mutableStateOf(false) }
+    var editingNotifyPath by remember { mutableStateOf(false) }
     var editingInputCornerRadius by remember { mutableStateOf(false) }
 
     Column(
@@ -301,6 +306,25 @@ internal fun GeneralSettingsSection(
                     onClick = { editingErrorPath = true }
                 )
             }
+            SettingsDivider()
+            SettingsRow(
+                icon = null,
+                title = "审批提醒音",
+                subtitle = "弹出需要确认的授权/提问/计划弹窗时播放",
+                onClick = { onToggleSoundOnNotify(!soundOnNotify) },
+                trailing = {
+                    AppSwitch(checked = soundOnNotify, onCheckedChange = onToggleSoundOnNotify)
+                }
+            )
+            if (soundOnNotify) {
+                SettingsDivider()
+                SettingsRow(
+                    icon = null,
+                    title = "音频路径",
+                    subtitle = if (soundNotifyPath.isBlank()) "默认提醒音" else soundNotifyPath,
+                    onClick = { editingNotifyPath = true }
+                )
+            }
         }
 
         SettingsGroupHeader(text = "外观")
@@ -451,6 +475,19 @@ internal fun GeneralSettingsSection(
                 editingErrorPath = false
             },
             onDismiss = { editingErrorPath = false }
+        )
+    }
+
+    if (editingNotifyPath) {
+        PathInputDialog(
+            title = "审批提醒音路径",
+            initialValue = soundNotifyPath,
+            hint = "留空用默认提醒音，如 /sdcard/Download/notify.mp3",
+            onConfirm = {
+                onSetSoundNotifyPath(it)
+                editingNotifyPath = false
+            },
+            onDismiss = { editingNotifyPath = false }
         )
     }
 

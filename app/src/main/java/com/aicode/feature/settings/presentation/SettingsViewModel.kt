@@ -608,6 +608,10 @@ class SettingsViewModel @Inject constructor(
     val soundCompletePath: StateFlow<String> = _soundCompletePath.asStateFlow()
     private val _soundErrorPath = MutableStateFlow("")
     val soundErrorPath: StateFlow<String> = _soundErrorPath.asStateFlow()
+    private val _soundOnNotify = MutableStateFlow(true)
+    val soundOnNotify: StateFlow<Boolean> = _soundOnNotify.asStateFlow()
+    private val _soundNotifyPath = MutableStateFlow("")
+    val soundNotifyPath: StateFlow<String> = _soundNotifyPath.asStateFlow()
     private val _inputCornerRadius = MutableStateFlow(16)
     val inputCornerRadius: StateFlow<Int> = _inputCornerRadius.asStateFlow()
 
@@ -1043,6 +1047,16 @@ class SettingsViewModel @Inject constructor(
             launch {
                 generalSettingsRepository.soundErrorPathFlow.collectLatest {
                     _soundErrorPath.value = it
+                }
+            }
+            launch {
+                generalSettingsRepository.soundOnNotifyFlow.collectLatest {
+                    _soundOnNotify.value = it
+                }
+            }
+            launch {
+                generalSettingsRepository.soundNotifyPathFlow.collectLatest {
+                    _soundNotifyPath.value = it
                 }
             }
             launch {
@@ -2115,6 +2129,18 @@ class SettingsViewModel @Inject constructor(
     fun setSoundErrorPath(path: String) {
         viewModelScope.launch {
             generalSettingsRepository.setSoundErrorPath(path)
+        }
+    }
+
+    fun setSoundOnNotify(enabled: Boolean) {
+        viewModelScope.launch {
+            generalSettingsRepository.setSoundOnNotify(enabled)
+        }
+    }
+
+    fun setSoundNotifyPath(path: String) {
+        viewModelScope.launch {
+            generalSettingsRepository.setSoundNotifyPath(path)
         }
     }
 

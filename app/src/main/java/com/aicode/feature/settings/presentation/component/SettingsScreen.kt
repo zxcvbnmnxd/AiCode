@@ -242,6 +242,8 @@ fun SettingsScreen(
     val soundOnError by viewModel.soundOnError.collectAsStateWithLifecycle()
     val soundCompletePath by viewModel.soundCompletePath.collectAsStateWithLifecycle()
     val soundErrorPath by viewModel.soundErrorPath.collectAsStateWithLifecycle()
+    val soundOnNotify by viewModel.soundOnNotify.collectAsStateWithLifecycle()
+    val soundNotifyPath by viewModel.soundNotifyPath.collectAsStateWithLifecycle()
     val inputCornerRadius by viewModel.inputCornerRadius.collectAsStateWithLifecycle()
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val themePresetId by viewModel.themePresetId.collectAsStateWithLifecycle()
@@ -883,6 +885,10 @@ fun SettingsScreen(
                     onSetSoundCompletePath = { viewModel.setSoundCompletePath(it) },
                     soundErrorPath = soundErrorPath,
                     onSetSoundErrorPath = { viewModel.setSoundErrorPath(it) },
+                    soundOnNotify = soundOnNotify,
+                    onToggleSoundOnNotify = { viewModel.setSoundOnNotify(it) },
+                    soundNotifyPath = soundNotifyPath,
+                    onSetSoundNotifyPath = { viewModel.setSoundNotifyPath(it) },
                     inputCornerRadius = inputCornerRadius,
                     onSetInputCornerRadius = { viewModel.setInputCornerRadius(it) }
                 )

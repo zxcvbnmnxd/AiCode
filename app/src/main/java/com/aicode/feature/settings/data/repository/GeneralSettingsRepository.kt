@@ -60,8 +60,10 @@ class GeneralSettingsRepository @Inject constructor(
         // 提示音设置
         val SOUND_ON_COMPLETE_KEY = booleanPreferencesKey("sound_on_complete")
         val SOUND_ON_ERROR_KEY = booleanPreferencesKey("sound_on_error")
+        val SOUND_ON_NOTIFY_KEY = booleanPreferencesKey("sound_on_notify")
         val SOUND_COMPLETE_PATH_KEY = stringPreferencesKey("sound_complete_path")
         val SOUND_ERROR_PATH_KEY = stringPreferencesKey("sound_error_path")
+        val SOUND_NOTIFY_PATH_KEY = stringPreferencesKey("sound_notify_path")
         val INPUT_CORNER_RADIUS_KEY = intPreferencesKey("input_corner_radius")
 
         /** 首字超时默认 5 分钟，与原硬编码值一致。 */
@@ -288,6 +290,14 @@ class GeneralSettingsRepository @Inject constructor(
         context.generalDataStore.edit { it[SOUND_ON_ERROR_KEY] = enabled }
     }
 
+    /** 弹出需要确认的审批/提问弹窗时播放提醒音；默认开启。 */
+    val soundOnNotifyFlow: Flow<Boolean> =
+        context.generalDataStore.data.map { it[SOUND_ON_NOTIFY_KEY] ?: true }
+
+    suspend fun setSoundOnNotify(enabled: Boolean) {
+        context.generalDataStore.edit { it[SOUND_ON_NOTIFY_KEY] = enabled }
+    }
+
     /** 完成提示音文件路径；默认空（用系统默认提示音）。 */
     val soundCompletePathFlow: Flow<String> =
         context.generalDataStore.data.map { it[SOUND_COMPLETE_PATH_KEY] ?: "" }
@@ -302,6 +312,14 @@ class GeneralSettingsRepository @Inject constructor(
 
     suspend fun setSoundErrorPath(path: String) {
         context.generalDataStore.edit { it[SOUND_ERROR_PATH_KEY] = path }
+    }
+
+    /** 审批提醒音文件路径；默认空（用内置提醒音）。 */
+    val soundNotifyPathFlow: Flow<String> =
+        context.generalDataStore.data.map { it[SOUND_NOTIFY_PATH_KEY] ?: "" }
+
+    suspend fun setSoundNotifyPath(path: String) {
+        context.generalDataStore.edit { it[SOUND_NOTIFY_PATH_KEY] = path }
     }
 
     /** 输入框圆角（dp）；默认 16。 */

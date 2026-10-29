@@ -1234,6 +1234,28 @@ class AIAgentViewModel @Inject constructor(
             }
         }
 
+        // 审批/提问/计划弹窗从「无」到「有」的边沿：出现新的待确认弹窗时播放提醒音（可在设置关闭）。
+        viewModelScope.launch {
+            var hadPending = false
+            combine(
+                toolPermissionManager.pendingRequest,
+                askUserQuestionManager.pendingQuestion,
+                planApprovalManager.pendingApproval
+            ) { permission, question, plan ->
+                permission != null || question != null || plan != null
+            }.collect { hasPending ->
+                if (hasPending && !hadPending) {
+                    try {
+                        if (generalSettingsRepository.soundOnNotifyFlow.first()) {
+                            val path = generalSettingsRepository.soundNotifyPathFlow.first()
+                            com.aicode.core.util.SoundPlayer.play(context, path.ifBlank { "notify" })
+                        }
+                    } catch (_: Exception) {}
+                }
+                hadPending = hasPending
+            }
+        }
+
         // 授权审批通知：阻塞等待用户确认（授权/提问/计划审批）时聚合会话，仅 App 在后台时由管理器展示。
         // 包含子代理会话——子代理也会提交授权，漏掉它们会让等待埋没。
         viewModelScope.launch {
